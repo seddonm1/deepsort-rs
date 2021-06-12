@@ -299,7 +299,7 @@ mod tests {
     }
 
     #[test]
-    fn test_initiate() {
+    fn initiate() {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.initiate(array![1.0, 2.0, 3.0, 4.0]);
@@ -360,7 +360,7 @@ mod tests {
     }
 
     #[test]
-    fn test_predict() {
+    fn predict() {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
@@ -458,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn test_project() {
+    fn project() {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
@@ -477,7 +477,7 @@ mod tests {
     }
 
     #[test]
-    fn test_update() {
+    fn update() {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
@@ -587,7 +587,7 @@ mod tests {
     }
 
     #[test]
-    fn test_gating_distance() {
+    fn gating_distance() {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
