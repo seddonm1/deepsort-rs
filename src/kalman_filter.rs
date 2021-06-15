@@ -74,10 +74,10 @@ impl KalmanFilter {
         dimensional) of the new track. Unobserved velocities are initialized
         to 0 mean.
     */
-    pub fn initiate(self, measurement: Array1<f32>) -> (Array1<f32>, Array2<f32>) {
-        let mean_pos = measurement.clone();
+    pub fn initiate(self, measurement: &Array1<f32>) -> (Array1<f32>, Array2<f32>) {
+        let mean_pos = measurement;
         let mean_vel = Array1::<f32>::zeros(mean_pos.raw_dim());
-        let mean = concatenate![Axis(0), mean_pos, mean_vel];
+        let mean = concatenate![Axis(0), *mean_pos, mean_vel];
 
         let std = array![
             2.0 * self.std_weight_position * measurement[3],
@@ -112,7 +112,11 @@ impl KalmanFilter {
         Returns the mean vector and covariance matrix of the predicted
         state. Unobserved velocities are initialized to 0 mean.
     */
-    pub fn predict(self, mean: Array1<f32>, covariance: Array2<f32>) -> (Array1<f32>, Array2<f32>) {
+    pub fn predict(
+        self,
+        mean: &Array1<f32>,
+        covariance: &Array2<f32>,
+    ) -> (Array1<f32>, Array2<f32>) {
         let std_pos = array![
             self.std_weight_position * mean[3],
             self.std_weight_position * mean[3],
@@ -133,8 +137,8 @@ impl KalmanFilter {
                 .diag(),
         );
 
-        let mean = self.motion_mat.dot(&mean);
-        let covariance = self.motion_mat.dot(&covariance).dot(&self.motion_mat.t()) + motion_cov;
+        let mean = self.motion_mat.dot(mean);
+        let covariance = self.motion_mat.dot(covariance).dot(&self.motion_mat.t()) + motion_cov;
 
         (mean, covariance)
     }
@@ -154,7 +158,11 @@ impl KalmanFilter {
         Returns the projected mean and covariance matrix of the given state
         estimate.
     */
-    pub fn project(self, mean: Array1<f32>, covariance: Array2<f32>) -> (Array1<f32>, Array2<f32>) {
+    pub fn project(
+        self,
+        mean: &Array1<f32>,
+        covariance: &Array2<f32>,
+    ) -> (Array1<f32>, Array2<f32>) {
         let std = array![
             self.std_weight_position * mean[3],
             self.std_weight_position * mean[3],
@@ -164,9 +172,8 @@ impl KalmanFilter {
 
         let innovation_cov = Array2::from_diag(&std.mapv(|v| v.powi(2)).diag());
 
-        let mean = self.update_mat.dot(&mean);
-        let covariance =
-            self.update_mat.dot(&covariance).dot(&self.update_mat.t()) + innovation_cov;
+        let mean = self.update_mat.dot(mean);
+        let covariance = self.update_mat.dot(covariance).dot(&self.update_mat.t()) + innovation_cov;
 
         (mean, covariance)
     }
@@ -190,12 +197,11 @@ impl KalmanFilter {
     */
     pub fn update(
         self,
-        mean: Array1<f32>,
-        covariance: Array2<f32>,
-        measurement: Array1<f32>,
+        mean: &Array1<f32>,
+        covariance: &Array2<f32>,
+        measurement: &Array1<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
-        let (projected_mean, projected_cov) =
-            &self.clone().project(mean.clone(), covariance.clone());
+        let (projected_mean, projected_cov) = &self.clone().project(mean, covariance);
 
         let cholesky_factor = projected_cov.factorizec(UPLO::Lower).unwrap();
 
@@ -212,9 +218,9 @@ impl KalmanFilter {
                 .unwrap();
         }
 
-        let innovation = &measurement - projected_mean;
+        let innovation = measurement - projected_mean;
 
-        let new_mean = &mean + innovation.dot(&kalman_gain.t());
+        let new_mean = mean + innovation.dot(&kalman_gain.t());
         let new_covariance = covariance - kalman_gain.dot(projected_cov).dot(&kalman_gain.t());
 
         (new_mean, new_covariance)
@@ -249,14 +255,14 @@ impl KalmanFilter {
     */
     pub fn gating_distance(
         self,
-        mean: Array1<f32>,
-        covariance: Array2<f32>,
-        measurements: Array2<f32>,
+        mean: &Array1<f32>,
+        covariance: &Array2<f32>,
+        measurements: &Array2<f32>,
     ) -> Array1<f32> {
         let (mean, covariance) = &self.project(mean, covariance);
 
         let cholesky_factor = covariance.cholesky(UPLO::Lower).unwrap();
-        let d = &measurements - mean;
+        let d = measurements - mean;
         let z = cholesky_factor
             .solve_triangular(UPLO::Lower, Diag::NonUnit, &d.reversed_axes())
             .unwrap();
@@ -302,7 +308,7 @@ mod tests {
     fn initiate() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.initiate(array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.initiate(&array![1.0, 2.0, 3.0, 4.0]);
 
         itertools::assert_equal(
             mean,
@@ -363,8 +369,8 @@ mod tests {
     fn predict() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
-        let (mean, covariance) = kf.clone().predict(mean.clone(), covariance.clone());
+        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().predict(&mean, &covariance);
 
         itertools::assert_equal(
             mean,
@@ -461,8 +467,8 @@ mod tests {
     fn project() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
-        let (mean, covariance) = kf.clone().project(mean.clone(), covariance.clone());
+        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().project(&mean, &covariance);
 
         itertools::assert_equal(mean, array![1.0f32, 2.0f32, 3.0f32, 4.0f32]);
         itertools::assert_equal(
@@ -480,11 +486,11 @@ mod tests {
     fn update() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
-        let (mean, covariance) = kf.clone().predict(mean.clone(), covariance.clone());
-        let (mean, covariance) =
-            kf.clone()
-                .update(mean.clone(), covariance.clone(), array![2.0, 3.0, 4.0, 5.0]);
+        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().predict(&mean, &covariance);
+        let (mean, covariance) = kf
+            .clone()
+            .update(&mean, &covariance, &array![2.0, 3.0, 4.0, 5.0]);
 
         itertools::assert_equal(
             mean,
@@ -590,12 +596,12 @@ mod tests {
     fn gating_distance() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(array![1.0, 2.0, 3.0, 4.0]);
-        let (mean, covariance) = kf.clone().predict(mean.clone(), covariance.clone());
+        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().predict(&mean, &covariance);
         let squared_maha = kf.gating_distance(
-            mean,
-            covariance,
-            array![[2.0, 3.0, 4.0, 5.0], [3.0, 4.0, 5.0, 6.0]],
+            &mean,
+            &covariance,
+            &array![[2.0, 3.0, 4.0, 5.0], [3.0, 4.0, 5.0, 6.0]],
         );
 
         itertools::assert_equal(squared_maha, array![107.95658, 431.82632,]);
