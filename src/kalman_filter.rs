@@ -277,7 +277,7 @@ mod tests {
     use ndarray::*;
 
     #[test]
-    fn test_new() {
+    fn new() {
         let kf = KalmanFilter::new();
 
         itertools::assert_equal(
