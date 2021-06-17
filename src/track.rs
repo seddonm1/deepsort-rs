@@ -7,7 +7,7 @@ the track state is changed to `confirmed`. Tracks that are no longer alive
 are classified as `deleted` to mark them for removal from the set of active
 tracks.
 */
-enum TrackState {
+pub enum TrackState {
     Tentative,
     Confirmed,
     Deleted,
@@ -25,7 +25,6 @@ pub struct Track {
     time_since_update: usize,
     features: Array2<f32>,
 }
-
 
 /**
 A single target track with state space `(x, y, a, h)` and associated
@@ -72,8 +71,15 @@ features : List[ndarray]
     vector is added to this list.
 */
 impl Track {
-    pub fn new(mean: Array1<f32>, covariance: Array2<f32>, track_id: usize, n_init: usize, max_age: usize, feature: Option<Array2<f32>>) -> Track {
-        Track{
+    pub fn new(
+        mean: Array1<f32>,
+        covariance: Array2<f32>,
+        track_id: usize,
+        n_init: usize,
+        max_age: usize,
+        feature: Option<Array2<f32>>,
+    ) -> Track {
+        Track {
             state: TrackState::Tentative,
             mean,
             covariance,
@@ -87,12 +93,11 @@ impl Track {
         }
     }
 
-
     fn to_tlwh(&self) -> Array1<f32> {
         let w = self.mean[2] * self.mean[3];
         let h = self.mean[3];
-        let t = self.mean[0] - (w/2.0);
-        let l = self.mean[1] - (h/2.0);
+        let t = self.mean[0] - (w / 2.0);
+        let l = self.mean[1] - (h / 2.0);
         array![t, l, w, h]
     }
 
@@ -102,11 +107,45 @@ impl Track {
         tlwh[3] = tlwh[3] + tlwh[1];
         tlwh
     }
-    // fn to_tlbr(&self) -> Array1<f32> {
-        // self.to_tlbr()
-    // }
-}
 
+    /// Mark this track as missed (no association at the current time step).
+    fn mark_missed(&mut self) {
+        match self.state {
+            TrackState::Tentative => {
+                self.state = TrackState::Deleted;
+            }
+            _ => {
+                if self.time_since_update > self.max_age {
+                    self.state = TrackState::Deleted;
+                }
+            }
+        }
+    }
+
+    /// Returns True if this track is tentative (unconfirmed).
+    fn is_tentative(&self) -> bool {
+        match self.state {
+            TrackState::Tentative => true,
+            _ => false,
+        }
+    }
+
+    /// Returns True if this track is confirmed.
+    fn is_confirmed(&self) -> bool {
+        match self.state {
+            TrackState::Confirmed => true,
+            _ => false,
+        }
+    }
+
+    /// Returns True if this track is dead and should be deleted.
+    fn is_deleted(&self) -> bool {
+        match self.state {
+            TrackState::Deleted => true,
+            _ => false,
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -122,7 +161,6 @@ mod tests {
     #[test]
     fn to_tlbr() {
         let t = Track::new(array![1.0, 2.0, 3.0, 4.0], array![[]], 0, 0, 0, None);
-        assert_eq!(t.to_tlwh(), array![-5.0f32, 0.0f32, 7.0f32, 4.0f32]);
+        assert_eq!(t.to_tlbr(), array![-5.0f32, 0.0f32, 7.0f32, 4.0f32]);
     }
-
 }
