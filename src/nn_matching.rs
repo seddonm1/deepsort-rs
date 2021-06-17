@@ -98,7 +98,6 @@ impl NearestNeighborDistanceMetric {
         matching_threshold: f32,
         budget: Option<i32>,
     ) -> NearestNeighborDistanceMetric {
-
         let metric_impl = match metric {
             Metric::Cosine => cosine_distance,
             Metric::Euclidean => euclidean_distance,
