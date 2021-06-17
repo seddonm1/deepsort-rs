@@ -71,13 +71,13 @@ mod tests {
     fn to_tlbr() {
         let detection = Detection::new(array![1.0f32, 2.0f32, 3.0f32, 4.0f32], 1.0, array![]);
 
-        itertools::assert_equal(detection.to_tlbr(), array![1.0f32, 2.0f32, 4.0f32, 6.0f32]);
+        assert_eq!(detection.to_tlbr(), array![1.0f32, 2.0f32, 4.0f32, 6.0f32]);
     }
 
     #[test]
     fn to_xyah() {
         let detection = Detection::new(array![1.0f32, 2.0f32, 3.0f32, 4.0f32], 1.0, array![]);
 
-        itertools::assert_equal(detection.to_xyah(), array![2.5f32, 4.0f32, 0.75f32, 4.0f32]);
+        assert_eq!(detection.to_xyah(), array![2.5f32, 4.0f32, 0.75f32, 4.0f32]);
     }
 }

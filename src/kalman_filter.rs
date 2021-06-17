@@ -1,5 +1,28 @@
+use std::collections::HashMap;
+
 use ndarray::*;
 use ndarray_linalg::*;
+
+lazy_static! {
+    /**
+    Table for the 0.95 quantile of the chi-square distribution with N degrees of
+    freedom (contains values for N=1, ..., 9). Taken from MATLAB/Octave's chi2inv
+    function and used as Mahalanobis gating threshold.
+    */
+    static ref CHI2INV95: HashMap<usize, f32> = {
+        let mut m = HashMap::new();
+        m.insert(1, 3.8415);
+        m.insert(2, 5.9915);
+        m.insert(3, 7.8147);
+        m.insert(4, 9.4877);
+        m.insert(5, 11.070);
+        m.insert(6, 12.592);
+        m.insert(7, 14.067);
+        m.insert(8, 15.507);
+        m.insert(9, 16.919);
+        m
+    };
+}
 
 /**
 A simple Kalman filter for tracking bounding boxes in image space.
@@ -74,7 +97,7 @@ impl KalmanFilter {
         dimensional) of the new track. Unobserved velocities are initialized
         to 0 mean.
     */
-    pub fn initiate(self, measurement: &Array1<f32>) -> (Array1<f32>, Array2<f32>) {
+    pub fn initiate(&self, measurement: &Array1<f32>) -> (Array1<f32>, Array2<f32>) {
         let mean_pos = measurement;
         let mean_vel = Array1::<f32>::zeros(mean_pos.raw_dim());
         let mean = concatenate![Axis(0), *mean_pos, mean_vel];
@@ -113,7 +136,7 @@ impl KalmanFilter {
         state. Unobserved velocities are initialized to 0 mean.
     */
     pub fn predict(
-        self,
+        &self,
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
@@ -159,7 +182,7 @@ impl KalmanFilter {
         estimate.
     */
     pub fn project(
-        self,
+        &self,
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
@@ -196,7 +219,7 @@ impl KalmanFilter {
         Returns the measurement-corrected state distribution.
     */
     pub fn update(
-        self,
+        &self,
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
         measurement: &Array1<f32>,
@@ -254,7 +277,7 @@ impl KalmanFilter {
         `measurements[i]`.
     */
     pub fn gating_distance(
-        self,
+        &self,
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
         measurements: &Array2<f32>,
@@ -280,7 +303,7 @@ mod tests {
     fn new() {
         let kf = KalmanFilter::new();
 
-        itertools::assert_equal(
+        assert_eq!(
             kf.motion_mat,
             array![
                 [1.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32],
@@ -293,7 +316,7 @@ mod tests {
                 [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32]
             ],
         );
-        itertools::assert_equal(
+        assert_eq!(
             kf.update_mat,
             array![
                 [1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
@@ -310,11 +333,11 @@ mod tests {
 
         let (mean, covariance) = kf.initiate(&array![1.0, 2.0, 3.0, 4.0]);
 
-        itertools::assert_equal(
+        assert_eq!(
             mean,
             array![1.0f32, 2.0f32, 3.0f32, 4.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
         );
-        itertools::assert_equal(
+        assert_eq!(
             covariance,
             array![
                 [
@@ -372,11 +395,11 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
 
-        itertools::assert_equal(
+        assert_eq!(
             mean,
             array![1.0f32, 2.0f32, 3.0f32, 4.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
         );
-        itertools::assert_equal(
+        assert_eq!(
             covariance,
             array![
                 [
@@ -470,8 +493,8 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
         let (mean, covariance) = kf.clone().project(&mean, &covariance);
 
-        itertools::assert_equal(mean, array![1.0f32, 2.0f32, 3.0f32, 4.0f32]);
-        itertools::assert_equal(
+        assert_eq!(mean, array![1.0f32, 2.0f32, 3.0f32, 4.0f32]);
+        assert_eq!(
             covariance,
             array![
                 [0.20000002f32, 0.0f32, 0.0f32, 0.0f32],
@@ -492,7 +515,7 @@ mod tests {
             .clone()
             .update(&mean, &covariance, &array![2.0, 3.0, 4.0, 5.0]);
 
-        itertools::assert_equal(
+        assert_eq!(
             mean,
             array![
                 1.8677686f32,
@@ -505,7 +528,7 @@ mod tests {
                 0.20661156f32
             ],
         );
-        itertools::assert_equal(
+        assert_eq!(
             covariance,
             array![
                 [
@@ -604,6 +627,6 @@ mod tests {
             &array![[2.0, 3.0, 4.0, 5.0], [3.0, 4.0, 5.0, 6.0]],
         );
 
-        itertools::assert_equal(squared_maha, array![107.95658, 431.82632,]);
+        assert_eq!(squared_maha, array![107.95658, 431.82632,]);
     }
 }
