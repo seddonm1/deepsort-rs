@@ -7,97 +7,61 @@ pub enum Metric {
     Euclidean,
 }
 
-pub trait MetricImpl {
-    fn apply(&self, x: Array2<f32>, y: Array2<f32>) -> Array1<f32>;
+/**
+Compute pair-wise cosine distance between points in `a` and `b`.
+
+Parameters
+----------
+x : ndarray
+    A matrix of N row-vectors (sample points).
+y : ndarray
+    A matrix of M row-vectors (query points).
+
+Returns
+-------
+ndarray
+    A vector of length M that contains for each entry in `y` the
+    smallest cosine distance to a sample in `x`.
+*/
+fn cosine_distance(x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
+    let (x_norm, _) = norm::normalize(x, NormalizeAxis::Row);
+    let (y_norm, _) = norm::normalize(y, NormalizeAxis::Row);
+
+    let distances = 1.0 - x_norm.dot(&y_norm.t());
+
+    distances.fold_axis(Axis(0), f32::MAX, |&accumulator, &value| {
+        accumulator.min(value)
+    })
 }
 
-pub struct Cosine {}
+/**
+Compute pair-wise sqauared distance between points in `a` and `b`.
 
-impl Cosine {
-    pub fn new() -> Cosine {
-        Cosine {}
-    }
-}
+Parameters
+----------
+x : ndarray
+    A matrix of N row-vectors (sample points).
+y : ndarray
+    A matrix of M row-vectors (query points).
 
-impl Default for Cosine {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+Returns
+-------
+ndarray
+    A vector of length M that contains for each entry in `y` the
+    smallest Euclidean distance to a sample in `x`.
+*/
+fn euclidean_distance(x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
+    let x2 = x.mapv(|v| v.powi(2)).sum_axis(Axis(1));
+    let y2 = y.mapv(|v| v.powi(2)).sum_axis(Axis(1));
 
-impl MetricImpl for Cosine {
-    /**
-    Compute pair-wise cosine distance between points in `a` and `b`.
+    let res = -2.0 * x.dot(&y.t()) + stack![Axis(0), x2].t() + stack![Axis(0), y2];
+    let distances = res.mapv(|v| v.clamp(0.0, f32::MAX));
 
-    Parameters
-    ----------
-    x : ndarray
-        A matrix of N row-vectors (sample points).
-    y : ndarray
-        A matrix of M row-vectors (query points).
-
-    Returns
-    -------
-    ndarray
-        A vector of length M that contains for each entry in `y` the
-        smallest cosine distance to a sample in `x`.
-    */
-    fn apply(&self, x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
-        let (x_norm, _) = norm::normalize(x, NormalizeAxis::Row);
-        let (y_norm, _) = norm::normalize(y, NormalizeAxis::Row);
-
-        let distances = 1.0 - x_norm.dot(&y_norm.t());
-
-        distances.fold_axis(Axis(0), f32::MAX, |&accumulator, &value| {
+    distances
+        .fold_axis(Axis(0), f32::MAX, |&accumulator, &value| {
             accumulator.min(value)
         })
-    }
-}
-
-pub struct Euclidean {}
-
-impl Euclidean {
-    pub fn new() -> Euclidean {
-        Euclidean {}
-    }
-}
-
-impl Default for Euclidean {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl MetricImpl for Euclidean {
-    /**
-    Compute pair-wise sqauared distance between points in `a` and `b`.
-
-    Parameters
-    ----------
-    x : ndarray
-        A matrix of N row-vectors (sample points).
-    y : ndarray
-        A matrix of M row-vectors (query points).
-
-    Returns
-    -------
-    ndarray
-        A vector of length M that contains for each entry in `y` the
-        smallest Euclidean distance to a sample in `x`.
-    */
-    fn apply(&self, x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
-        let x2 = x.mapv(|v| v.powi(2)).sum_axis(Axis(1));
-        let y2 = y.mapv(|v| v.powi(2)).sum_axis(Axis(1));
-
-        let res = -2.0 * x.dot(&y.t()) + stack![Axis(0), x2].t() + stack![Axis(0), y2];
-        let distances = res.mapv(|v| v.clamp(0.0, f32::MAX));
-
-        distances
-            .fold_axis(Axis(0), f32::MAX, |&accumulator, &value| {
-                accumulator.min(value)
-            })
-            .mapv(|v| v.clamp(0.0, f32::MAX))
-    }
+        .mapv(|v| v.clamp(0.0, f32::MAX))
 }
 
 /**
@@ -122,7 +86,7 @@ samples : Dict[int -> List[ndarray]]
     that have been observed so far.
 */
 pub struct NearestNeighborDistanceMetric {
-    metric: Box<dyn MetricImpl>,
+    metric: fn(Array2<f32>, Array2<f32>) -> Array1<f32>,
     _matching_threshold: f32,
     budget: Option<i32>,
     samples: HashMap<usize, Array2<f32>>,
@@ -134,9 +98,9 @@ impl NearestNeighborDistanceMetric {
         matching_threshold: f32,
         budget: Option<i32>,
     ) -> NearestNeighborDistanceMetric {
-        let metric_impl: Box<dyn MetricImpl> = match metric {
-            Metric::Cosine => Box::new(Cosine::new()),
-            Metric::Euclidean => Box::new(Euclidean::new()),
+        let metric_impl = match metric {
+            Metric::Cosine => cosine_distance,
+            Metric::Euclidean => euclidean_distance,
         };
 
         NearestNeighborDistanceMetric {
@@ -210,8 +174,7 @@ impl NearestNeighborDistanceMetric {
         targets.iter().for_each(|target| {
             cost_matrix
                 .push_row(
-                    self.metric
-                        .apply(self.samples.get(target).unwrap().clone(), features.clone())
+                    (self.metric)(self.samples.get(target).unwrap().clone(), features.clone())
                         .view(),
                 )
                 .unwrap();
