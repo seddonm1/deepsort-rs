@@ -1,5 +1,8 @@
 use ndarray::*;
 
+use crate::Detection;
+use crate::KalmanFilter;
+
 /**
 Enumeration type for the single target track state. Newly created tracks are
 classified as `tentative` until enough evidence has been collected. Then,
@@ -108,17 +111,55 @@ impl Track {
         tlwh
     }
 
+    /**
+    Propagate the state distribution to the current time step using a
+    Kalman filter prediction step.
+
+    Parameters
+    ----------
+    kf : kalman_filter.KalmanFilter
+        The Kalman filter.
+    */
+    fn predict(&mut self, kf: KalmanFilter) {
+        let (mean, covariance) = kf.predict(&self.mean, &self.covariance);
+        self.mean = mean;
+        self.covariance = covariance;
+        self.age += 1;
+        self.time_since_update += 1;
+    }
+
+    /**
+    Perform Kalman filter measurement update step and update the feature
+    cache.
+
+    Parameters
+    ----------
+    kf : kalman_filter.KalmanFilter
+        The Kalman filter.
+    detection : Detection
+        The associated detection.
+    */
+    fn update(&mut self, kf: KalmanFilter, detection: Detection) {
+        let (mean, covariance) = kf.update(&self.mean, &self.covariance, &detection.to_xyah());
+        self.mean = mean;
+        self.covariance = covariance;
+
+        self.features.push_row(detection.feature.view()).unwrap();
+
+        self.hits += 1;
+        self.time_since_update = 0;
+
+        if matches!(self.state, TrackState::Tentative) && self.hits >= self.n_init {
+            self.state = TrackState::Confirmed
+        }
+    }
+
     /// Mark this track as missed (no association at the current time step).
     fn mark_missed(&mut self) {
-        match self.state {
-            TrackState::Tentative => {
-                self.state = TrackState::Deleted;
-            }
-            _ => {
-                if self.time_since_update > self.max_age {
-                    self.state = TrackState::Deleted;
-                }
-            }
+        if matches!(self.state, TrackState::Tentative) {
+            self.state = TrackState::Deleted;
+        } else if self.time_since_update > self.max_age {
+            self.state = TrackState::Deleted;
         }
     }
 

@@ -25,7 +25,7 @@ feature : ndarray | NoneType
 pub struct Detection {
     tlwh: Array1<f32>,
     confidence: f32,
-    feature: Array1<f32>,
+    pub feature: Array1<f32>,
 }
 
 impl Detection {
@@ -52,7 +52,7 @@ impl Detection {
     /**
     Convert bounding box to format `(center x, center y, aspect ratio, height)`, where the aspect ratio is `width / height`.
     */
-    fn to_xyah(&self) -> Array1<f32> {
+    pub fn to_xyah(&self) -> Array1<f32> {
         array![
             self.tlwh[0] + (self.tlwh[2] / 2.0),
             self.tlwh[1] + (self.tlwh[3] / 2.0),
