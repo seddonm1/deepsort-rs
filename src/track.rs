@@ -124,26 +124,17 @@ impl Track {
 
     /// Returns True if this track is tentative (unconfirmed).
     fn is_tentative(&self) -> bool {
-        match self.state {
-            TrackState::Tentative => true,
-            _ => false,
-        }
+        matches!(self.state, TrackState::Tentative)
     }
 
     /// Returns True if this track is confirmed.
     fn is_confirmed(&self) -> bool {
-        match self.state {
-            TrackState::Confirmed => true,
-            _ => false,
-        }
+        matches!(self.state, TrackState::Confirmed)
     }
 
     /// Returns True if this track is dead and should be deleted.
     fn is_deleted(&self) -> bool {
-        match self.state {
-            TrackState::Deleted => true,
-            _ => false,
-        }
+        matches!(self.state, TrackState::Deleted)
     }
 }
 
