@@ -58,7 +58,7 @@ impl KalmanFilter {
         // Create Kalman filter model matrices and set initial values
         let mut motion_mat = Array2::from_diag(&Array1::<f32>::ones(2 * ndim));
         for i in 0..ndim {
-            motion_mat[[i, ndim + i]] = 1.0f32;
+            motion_mat[[i, ndim + i]] = 1.0;
         }
 
         let update_mat = concatenate!(
@@ -70,8 +70,8 @@ impl KalmanFilter {
         // Motion and observation uncertainty are chosen relative to the current
         // state estimate. These weights control the amount of uncertainty in
         // the model. This is a bit hacky.
-        let std_weight_position = 1.0f32 / 20.0f32;
-        let std_weight_velocity = 1.0f32 / 160.0f32;
+        let std_weight_position = 1.0 / 20.0;
+        let std_weight_velocity = 1.0 / 160.0;
 
         KalmanFilter {
             motion_mat,
@@ -102,7 +102,7 @@ impl KalmanFilter {
         let mean_vel = Array1::<f32>::zeros(mean_pos.raw_dim());
         let mean = concatenate![Axis(0), *mean_pos, mean_vel];
 
-        let std = array![
+        let std = arr1::<f32>(&[
             2.0 * self.std_weight_position * measurement[3],
             2.0 * self.std_weight_position * measurement[3],
             1e-2,
@@ -111,7 +111,7 @@ impl KalmanFilter {
             10.0 * self.std_weight_velocity * measurement[3],
             1e-5,
             10.0 * self.std_weight_velocity * measurement[3],
-        ];
+        ]);
 
         let covariance = Array2::from_diag(&std.mapv(|v| v.powi(2)).diag());
 
@@ -140,19 +140,19 @@ impl KalmanFilter {
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
-        let std_pos = array![
+        let std_pos = arr1::<f32>(&[
             self.std_weight_position * mean[3],
             self.std_weight_position * mean[3],
             1e-2,
-            self.std_weight_position * mean[3]
-        ];
+            self.std_weight_position * mean[3],
+        ]);
 
-        let std_vel = array![
+        let std_vel = arr1::<f32>(&[
             self.std_weight_velocity * mean[3],
             self.std_weight_velocity * mean[3],
             1e-5,
-            self.std_weight_velocity * mean[3]
-        ];
+            self.std_weight_velocity * mean[3],
+        ]);
 
         let motion_cov = Array2::from_diag(
             &concatenate![Axis(0), std_pos, std_vel]
@@ -186,12 +186,12 @@ impl KalmanFilter {
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
-        let std = array![
+        let std = arr1::<f32>(&[
             self.std_weight_position * mean[3],
             self.std_weight_position * mean[3],
             1e-1,
-            self.std_weight_position * mean[3]
-        ];
+            self.std_weight_position * mean[3],
+        ]);
 
         let innovation_cov = Array2::from_diag(&std.mapv(|v| v.powi(2)).diag());
 
@@ -305,25 +305,25 @@ mod tests {
 
         assert_eq!(
             kf.motion_mat,
-            array![
-                [1.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 1.0f32]
-            ],
+            arr2::<f32, _>(&[
+                [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+                [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+            ]),
         );
         assert_eq!(
             kf.update_mat,
-            array![
-                [1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 1.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32]
-            ],
+            arr2::<f32, _>(&[
+                [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
+            ]),
         );
     }
 
@@ -331,60 +331,21 @@ mod tests {
     fn initiate() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
 
-        assert_eq!(
-            mean,
-            array![1.0f32, 2.0f32, 3.0f32, 4.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
-        );
+        assert_eq!(mean, arr1::<f32>(&[1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]),);
         assert_eq!(
             covariance,
-            array![
-                [
-                    0.16000001f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.16000001f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [0.0f32, 0.0f32, 0.0001f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.16000001f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0625f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0625f32, 0.0f32, 0.0f32],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.000000000099999994f32,
-                    0.0f32
-                ],
-                [0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0625f32]
-            ],
+            arr2::<f32, _>(&[
+                [0.16000001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.16000001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.16000001, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.000000000099999994, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0625]
+            ]),
         );
     }
 
@@ -392,97 +353,40 @@ mod tests {
     fn predict() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
 
-        assert_eq!(
-            mean,
-            array![1.0f32, 2.0f32, 3.0f32, 4.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
-        );
+        assert_eq!(mean, arr1::<f32>(&[1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]),);
         assert_eq!(
             covariance,
-            array![
+            arr2::<f32, _>(&[
+                [0.26250002, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0, 0.0],
+                [0.0, 0.26250002, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0],
                 [
-                    0.26250002f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0625f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
+                    0.0,
+                    0.0,
+                    0.0002000001,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.000000000099999994,
+                    0.0
                 ],
+                [0.0, 0.0, 0.0, 0.26250002, 0.0, 0.0, 0.0, 0.0625],
+                [0.0625, 0.0, 0.0, 0.0, 0.063125, 0.0, 0.0, 0.0],
+                [0.0, 0.0625, 0.0, 0.0, 0.0, 0.063125, 0.0, 0.0],
                 [
-                    0.0f32,
-                    0.26250002f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0625f32,
-                    0.0f32,
-                    0.0f32
+                    0.0,
+                    0.0,
+                    0.000000000099999994,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.00000000019999999,
+                    0.0
                 ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0002000001f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.000000000099999994f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.26250002f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0625f32
-                ],
-                [
-                    0.0625f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.063125f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0625f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.063125f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.000000000099999994f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.00000000019999999f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0625f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.063125f32
-                ]
-            ],
+                [0.0, 0.0, 0.0, 0.0625, 0.0, 0.0, 0.0, 0.063125]
+            ]),
         );
     }
 
@@ -490,18 +394,18 @@ mod tests {
     fn project() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
         let (mean, covariance) = kf.clone().project(&mean, &covariance);
 
-        assert_eq!(mean, array![1.0f32, 2.0f32, 3.0f32, 4.0f32]);
+        assert_eq!(mean, arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]),);
         assert_eq!(
             covariance,
-            array![
-                [0.20000002f32, 0.0f32, 0.0f32, 0.0f32],
-                [0.0f32, 0.20000002, 0.0f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.010100001f32, 0.0f32],
-                [0.0f32, 0.0f32, 0.0f32, 0.20000002f32]
-            ],
+            arr2::<f32, _>(&[
+                [0.20000002, 0.0, 0.0, 0.0],
+                [0.0, 0.20000002, 0.0, 0.0],
+                [0.0, 0.0, 0.010100001, 0.0],
+                [0.0, 0.0, 0.0, 0.20000002]
+            ]),
         );
     }
 
@@ -509,15 +413,15 @@ mod tests {
     fn update() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
-        let (mean, covariance) = kf
-            .clone()
-            .update(&mean, &covariance, &array![2.0, 3.0, 4.0, 5.0]);
+        let (mean, covariance) =
+            kf.clone()
+                .update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
 
         assert_eq!(
             mean,
-            array![
+            arr1::<f32>(&[
                 1.8677686f32,
                 2.8677688f32,
                 3.0196078f32,
@@ -526,92 +430,38 @@ mod tests {
                 0.20661156f32,
                 0.000000009803921f32,
                 0.20661156f32
-            ],
+            ]),
         );
         assert_eq!(
             covariance,
-            array![
+            arr2::<f32, _>(&[
+                [0.034710735, 0.0, 0.0, 0.0, 0.008264463, 0.0, 0.0, 0.0],
+                [0.0, 0.034710735, 0.0, 0.0, 0.0, 0.008264463, 0.0, 0.0],
                 [
-                    0.034710735f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.008264463f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
+                    0.0,
+                    0.0,
+                    0.00019607853,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.00000000009803921,
+                    0.0
                 ],
+                [0.0, 0.0, 0.0, 0.034710735, 0.0, 0.0, 0.0, 0.008264463],
+                [0.00826446, 0.0, 0.0, 0.0, 0.050211776, 0.0, 0.0, 0.0],
+                [0.0, 0.00826446, 0.0, 0.0, 0.0, 0.050211776, 0.0, 0.0],
                 [
-                    0.0f32,
-                    0.034710735f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.008264463f32,
-                    0.0f32,
-                    0.0f32
+                    0.0,
+                    0.0,
+                    0.00000000009803921,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.00000000019999999,
+                    0.0
                 ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.00019607853f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.00000000009803921f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.034710735f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.008264463f32
-                ],
-                [
-                    0.00826446f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.050211776f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.00826446f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.050211776f32,
-                    0.0f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.00000000009803921f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.00000000019999999f32,
-                    0.0f32
-                ],
-                [
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.00826446f32,
-                    0.0f32,
-                    0.0f32,
-                    0.0f32,
-                    0.050211776f32
-                ]
-            ],
+                [0.0, 0.0, 0.0, 0.00826446, 0.0, 0.0, 0.0, 0.050211776]
+            ]),
         );
     }
 
@@ -619,14 +469,14 @@ mod tests {
     fn gating_distance() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
         let squared_maha = kf.gating_distance(
             &mean,
             &covariance,
-            &array![[2.0, 3.0, 4.0, 5.0], [3.0, 4.0, 5.0, 6.0]],
+            &arr2::<f32, _>(&[[2.0, 3.0, 4.0, 5.0], [3.0, 4.0, 5.0, 6.0]]),
         );
 
-        assert_eq!(squared_maha, array![107.95658, 431.82632,]);
+        assert_eq!(squared_maha, arr1(&[107.95658, 431.82632,]));
     }
 }

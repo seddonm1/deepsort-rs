@@ -85,6 +85,7 @@ samples : Dict[int -> List[ndarray]]
     A dictionary that maps from target identities to the list of samples
     that have been observed so far.
 */
+#[derive(Debug)]
 pub struct NearestNeighborDistanceMetric {
     metric: fn(Array2<f32>, Array2<f32>) -> Array1<f32>,
     _matching_threshold: f32,

@@ -22,12 +22,12 @@ pub struct Track {
     state: TrackState,
     mean: Array1<f32>,
     covariance: Array2<f32>,
-    track_id: usize,
+    pub track_id: usize,
     n_init: usize,
     max_age: usize,
     hits: usize,
     age: usize,
-    time_since_update: usize,
+    pub time_since_update: usize,
     features: Array2<f32>,
 }
 
@@ -122,7 +122,7 @@ impl Track {
     kf : kalman_filter.KalmanFilter
         The Kalman filter.
     */
-    fn predict(&mut self, kf: &KalmanFilter) {
+    pub fn predict(&mut self, kf: &KalmanFilter) {
         let (mean, covariance) = kf.predict(&self.mean, &self.covariance);
         self.mean = mean;
         self.covariance = covariance;
@@ -141,7 +141,7 @@ impl Track {
     detection : Detection
         The associated detection.
     */
-    fn update(&mut self, kf: &KalmanFilter, detection: &Detection) {
+    pub fn update(&mut self, kf: &KalmanFilter, detection: &Detection) {
         let (mean, covariance) = kf.update(&self.mean, &self.covariance, &detection.to_xyah());
         self.mean = mean;
         self.covariance = covariance;
@@ -157,7 +157,7 @@ impl Track {
     }
 
     /// Mark this track as missed (no association at the current time step).
-    fn mark_missed(&mut self) {
+    pub fn mark_missed(&mut self) {
         if matches!(self.state, TrackState::Tentative) || self.time_since_update > self.max_age {
             self.state = TrackState::Deleted;
         }
@@ -169,7 +169,7 @@ impl Track {
     }
 
     /// Returns True if this track is confirmed.
-    fn is_confirmed(&self) -> bool {
+    pub fn is_confirmed(&self) -> bool {
         matches!(self.state, TrackState::Confirmed)
     }
 
