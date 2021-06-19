@@ -2,6 +2,25 @@ use crate::*;
 
 use ndarray::*;
 
+
+/**
+Computer intersection over union.
+
+Parameters
+----------
+bbox : ndarray
+    A bounding box in format `(top left x, top left y, width, height)`.
+candidates : ndarray
+    A matrix of candidate bounding boxes (one per row) in the same format
+    as `bbox`.
+
+    Returns
+-------
+ndarray
+    The intersection over union in [0, 1] between the `bbox` and each
+    candidate. A higher score means a larger fraction of the `bbox` is
+    occluded by the candidate.
+*/
 pub fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
     let bbox_tl = bbox.slice(s![..2]).to_owned();
     let bbox_br = &bbox_tl + bbox.slice(s![2..4]).to_owned();
@@ -27,6 +46,29 @@ pub fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
     &area_intersection / (&area_bbox + &area_candidates - &area_intersection)
 }
 
+/**
+An intersection over union distance metric.
+
+Parameters
+----------
+tracks : List[deep_sort.track.Track]
+    A list of tracks.
+detections : List[deep_sort.detection.Detection]
+    A list of detections.
+track_indices : Optional[List[int]]
+    A list of indices to tracks that should be matched. Defaults to
+    all `tracks`.
+detection_indices : Optional[List[int]]
+    A list of indices to detections that should be matched. Defaults
+    to all `detections`.
+
+Returns
+-------
+ndarray
+    Returns a cost matrix of shape
+    len(track_indices), len(detection_indices) where entry (i, j) is
+    `1 - iou(tracks[track_indices[i]], detections[detection_indices[j]])`.
+*/
 pub fn iou_cost(
     tracks: &[Track],
     detections: &[Detection],
