@@ -108,7 +108,11 @@ impl Tracker {
             .iter_mut()
             .filter(|track| track.is_confirmed())
             .for_each(|track| {
+                println!("before");
+                println!("{:?}", features);
+                println!("{:?}", track.features);
                 features = concatenate![Axis(0), features, track.features];
+                println!("after");
                 targets.push(track.track_id);
                 track.features = Array2::zeros((0, 128));
             });
