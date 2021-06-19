@@ -77,9 +77,9 @@ impl Tracker {
     detections : List[deep_sort.detection.Detection]
         A list of detections at the current time step.
     */
-    pub fn update(&mut self, detections: Vec<Detection>) {
+    pub fn update(&mut self, detections: &[Detection]) {
         // Run matching cascade.
-        let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(&detections);
+        let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(detections);
 
         // Update track set.
         for m in matches {
@@ -232,7 +232,21 @@ impl Tracker {
 
 #[cfg(test)]
 mod tests {
+    use crate::*;
+    use ndarray::*;
 
     #[test]
-    fn a() {}
+    fn tracker() {
+        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
+        let mut tracker = Tracker::new(metric, None, None, None);
+
+        &tracker.predict();
+
+        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
+        &tracker.update(&[d0]);
+
+        for track in tracker.tracks {
+            println!("{:?}", track);
+        }
+    }
 }

@@ -190,9 +190,9 @@ mod tests {
 
     #[test]
     fn partial_fit() {
-        let mut nn = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.5, None);
+        let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.5, None);
 
-        nn.partial_fit(
+        metric.partial_fit(
             &stack![
                 Axis(0),
                 Array::range(0.0, 128.0, 1.0),
@@ -202,21 +202,21 @@ mod tests {
             &vec![0, 1],
         );
         assert_eq!(
-            nn.samples.get(&0).unwrap(),
+            metric.samples.get(&0).unwrap(),
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
         );
         assert_eq!(
-            nn.samples.get(&1).unwrap(),
+            metric.samples.get(&1).unwrap(),
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
         );
 
-        nn.partial_fit(
+        metric.partial_fit(
             &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
             &array![0],
             &vec![0, 1],
         );
         assert_eq!(
-            nn.samples.get(&0).unwrap(),
+            metric.samples.get(&0).unwrap(),
             stack![
                 Axis(0),
                 Array::range(0.0, 128.0, 1.0),
@@ -224,18 +224,18 @@ mod tests {
             ]
         );
         assert_eq!(
-            nn.samples.get(&1).unwrap(),
+            metric.samples.get(&1).unwrap(),
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
         );
 
-        nn.partial_fit(
+        metric.partial_fit(
             &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
             &array![1],
             &vec![1],
         );
-        assert_eq!(nn.samples.get(&0), None);
+        assert_eq!(metric.samples.get(&0), None);
         assert_eq!(
-            nn.samples.get(&1).unwrap(),
+            metric.samples.get(&1).unwrap(),
             stack![
                 Axis(0),
                 Array::range(0.0, 128.0, 1.0),
@@ -246,9 +246,9 @@ mod tests {
 
     #[test]
     fn cosine_distance() {
-        let mut nn = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.5, None);
+        let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.5, None);
 
-        nn.partial_fit(
+        metric.partial_fit(
             &stack![
                 Axis(0),
                 Array::range(0.0, 128.0, 1.0),
@@ -258,7 +258,7 @@ mod tests {
             &vec![0, 1],
         );
 
-        let distances = nn.distance(
+        let distances = metric.distance(
             &stack![
                 Axis(0),
                 Array::range(0.1, 128.1, 1.0),
@@ -278,9 +278,9 @@ mod tests {
 
     #[test]
     fn euclidean_distance() {
-        let mut nn = NearestNeighborDistanceMetric::new(Metric::Euclidean, 0.5, None);
+        let mut metric = NearestNeighborDistanceMetric::new(Metric::Euclidean, 0.5, None);
 
-        nn.partial_fit(
+        metric.partial_fit(
             &stack![
                 Axis(0),
                 Array::range(0.0, 128.0, 1.0),
@@ -290,7 +290,7 @@ mod tests {
             &vec![0, 1],
         );
 
-        let distances = nn.distance(
+        let distances = metric.distance(
             &stack![
                 Axis(0),
                 Array::range(0.1, 128.1, 1.0),
