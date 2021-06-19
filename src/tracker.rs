@@ -102,17 +102,13 @@ impl Tracker {
             .filter(|track| track.is_confirmed())
             .map(|track| track.track_id)
             .collect();
-        let mut features = arr2::<f32, _>(&[[]]);
+        let mut features = Array2::<f32>::zeros((0, 128));
         let mut targets: Vec<usize> = vec![];
         self.tracks
             .iter_mut()
             .filter(|track| track.is_confirmed())
             .for_each(|track| {
-                println!("before");
-                println!("{:?}", features);
-                println!("{:?}", track.features);
                 features = concatenate![Axis(0), features, track.features];
-                println!("after");
                 targets.push(track.track_id);
                 track.features = Array2::zeros((0, 128));
             });
