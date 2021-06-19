@@ -28,8 +28,8 @@ pub fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
 }
 
 pub fn iou_cost(
-    tracks: Vec<Track>,
-    detections: Vec<Detection>,
+    tracks: &[Track],
+    detections: &[Detection],
     track_indices: Option<Vec<usize>>,
     detection_indices: Option<Vec<usize>>,
 ) -> Array2<f32> {
@@ -84,23 +84,17 @@ mod tests {
     fn iou_cost() {
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
-        let track0 = Track::new(mean, covariance, 0, 0, 0, None);
+        let t0 = Track::new(mean, covariance, 0, 0, 30, None);
 
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
-        let track1 = Track::new(mean, covariance, 0, 0, 0, None);
+        let t1 = Track::new(mean, covariance, 1, 0, 30, None);
 
-        let detection0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
-        let detection1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, arr1::<f32>(&[]));
-        let detection2 =
-            Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, arr1::<f32>(&[]));
+        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
+        let d1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, arr1::<f32>(&[]));
+        let d2 = Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, arr1::<f32>(&[]));
 
-        let cost_matrix = iou_matching::iou_cost(
-            vec![track0, track1],
-            vec![detection0, detection1, detection2],
-            None,
-            None,
-        );
+        let cost_matrix = iou_matching::iou_cost(&vec![t0, t1], &vec![d0, d1, d2], None, None);
 
         assert_eq!(
             cost_matrix,
