@@ -115,9 +115,25 @@ impl Tracker {
     }
 
     fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
-        // fn gated_metric(tracks: Vec<Track>) -> Array2<f32> {
-        //     arr2::<f32, _>(&[[]])
-        // }
+
+        let gated_metric = |tracks: &[Track],
+        dets: &[Detection],
+        track_indices: Vec<usize>,
+        detection_indices: Vec<usize>,| -> Array2<f32> {
+            let mut features = arr2::<f32, _>(&[[]]);
+            detection_indices.iter().for_each(|i| features.push_row(dets.get(*i).unwrap().feature.view()).unwrap());
+            let targets = track_indices.iter().map(|i| tracks.get(*i).unwrap().track_id).collect::<Vec<usize>>();
+            let cost_matrix = self.clone().metric.distance(&features, &targets);
+
+
+            // // cost_matrix = linear_assignment.gate_cost_matrix(
+            // //     self.kf, cost_matrix, tracks, dets, track_indices,
+            // //     detection_indices)
+
+            // // return cost_matrix
+
+            array![[]]
+         } ;
 
         // Split track set into confirmed and unconfirmed tracks.
         let confirmed_tracks: Vec<usize> = self
@@ -135,14 +151,14 @@ impl Tracker {
             .map(|(i, _)| i)
             .collect();
 
-        // # Associate confirmed tracks using appearance features.
-        // matches_a, unmatched_tracks_a, unmatched_detections = \
-        //     linear_assignment.matching_cascade(
+        // Associate confirmed tracks using appearance features.
+        // let (matches_a, unmatched_tracks_a, unmatched_detections) = linear_assignment::matching_cascade(
         //         gated_metric, self.metric.matching_threshold, self.max_age,
-        //         self.tracks, detections, confirmed_tracks)
-        let matches_a: Vec<Match> = vec![];
-        let unmatched_tracks_a: Vec<usize> = vec![];
-        let unmatched_detections: Vec<usize> = vec![];
+        //         &self.tracks, detections, Some(confirmed_tracks), None);
+                let matches_a: Vec<Match> = vec![];
+                let unmatched_tracks_a: Vec<usize> = vec![];
+                let unmatched_detections: Vec<usize> = vec![];
+
 
         // Associate remaining tracks together with unconfirmed tracks using IOU.
         let iou_track_candidates = [

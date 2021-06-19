@@ -88,7 +88,7 @@ samples : Dict[int -> List[ndarray]]
 #[derive(Debug)]
 pub struct NearestNeighborDistanceMetric {
     metric: fn(Array2<f32>, Array2<f32>) -> Array1<f32>,
-    _matching_threshold: f32,
+    pub matching_threshold: f32,
     budget: Option<i32>,
     samples: HashMap<usize, Array2<f32>>,
 }
@@ -106,7 +106,7 @@ impl NearestNeighborDistanceMetric {
 
         NearestNeighborDistanceMetric {
             metric: metric_impl,
-            _matching_threshold: matching_threshold,
+            matching_threshold,
             budget,
             samples: HashMap::new(),
         }
