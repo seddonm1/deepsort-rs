@@ -92,7 +92,8 @@ mod tests {
 
         let detection0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
         let detection1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, arr1::<f32>(&[]));
-        let detection2 = Detection::new(arr1::<f32>(&[6.0, 7.0, 8.0, 9.0]), 1.0, arr1::<f32>(&[]));
+        let detection2 =
+            Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, arr1::<f32>(&[]));
 
         let cost_matrix = iou_matching::iou_cost(
             vec![track0, track1],
@@ -104,8 +105,8 @@ mod tests {
         assert_eq!(
             cost_matrix,
             arr2::<f32, _>(&[
-                [0.92537314, 0.9591837, 0.9661017],
-                [0.93877554, 0.8965517, 1.0]
+                [0.92537313, 0.95918367, 0.0],
+                [0.93877551, 0.89655172, 0.74522293]
             ])
         );
     }
