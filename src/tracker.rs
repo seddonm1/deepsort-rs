@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use crate::*;
 
 use ndarray::*;
@@ -114,38 +116,43 @@ impl Tracker {
             .partial_fit(&features, &ArrayBase::from(targets), &active_targets)
     }
 
-    fn match_impl(&'static self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
-        let gated_metric = Box::new(|tracks: &[Track],
-                            dets: &[Detection],
-                            track_indices: Option<Vec<usize>>,
-                            detection_indices: Option<Vec<usize>>|
-         -> Array2<f32> {
-            let detection_indices = detection_indices.unwrap();
-            let track_indices = track_indices.unwrap();
+    fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
+        let metric = self.metric.clone();
+        let kf = self.kf.clone();
 
-            let mut features = arr2::<f32, _>(&[[]]);
-            detection_indices.iter().for_each(|i| {
-                features
-                    .push_row(dets.get(*i).unwrap().feature.view())
-                    .unwrap()
-            });
-            let targets = track_indices
-                .iter()
-                .map(|i| tracks.get(*i).unwrap().track_id)
-                .collect::<Vec<usize>>();
-            let cost_matrix = self.metric.distance(&features, &targets);
+        let gated_metric = Rc::new(
+            move |tracks: &[Track],
+                  dets: &[Detection],
+                  track_indices: Option<Vec<usize>>,
+                  detection_indices: Option<Vec<usize>>|
+                  -> Array2<f32> {
+                let detection_indices = detection_indices.unwrap();
+                let track_indices = track_indices.unwrap();
 
-            linear_assignment::gate_cost_matrix(
-                self.kf.clone(),
-                cost_matrix,
-                tracks,
-                dets,
-                track_indices,
-                detection_indices,
-                None,
-                None,
-            )
-        });
+                let mut features = arr2::<f32, _>(&[[]]);
+                detection_indices.iter().for_each(|i| {
+                    features
+                        .push_row(dets.get(*i).unwrap().feature.view())
+                        .unwrap()
+                });
+                let targets = track_indices
+                    .iter()
+                    .map(|i| tracks.get(*i).unwrap().track_id)
+                    .collect::<Vec<usize>>();
+                let cost_matrix = metric.distance(&features, &targets);
+
+                linear_assignment::gate_cost_matrix(
+                    kf.clone(),
+                    cost_matrix,
+                    tracks,
+                    dets,
+                    track_indices,
+                    detection_indices,
+                    None,
+                    None,
+                )
+            },
+        );
 
         // Split track set into confirmed and unconfirmed tracks.
         let confirmed_tracks: Vec<usize> = self
@@ -164,12 +171,16 @@ impl Tracker {
             .collect();
 
         // Associate confirmed tracks using appearance features.
-        let (matches_a, unmatched_tracks_a, unmatched_detections) = linear_assignment::matching_cascade(
-                gated_metric, self.metric.matching_threshold, self.max_age,
-                &self.tracks, detections, Some(confirmed_tracks), None);
-        let matches_a: Vec<Match> = vec![];
-        let unmatched_tracks_a: Vec<usize> = vec![];
-        let unmatched_detections: Vec<usize> = vec![];
+        let (matches_a, unmatched_tracks_a, unmatched_detections) =
+            linear_assignment::matching_cascade(
+                gated_metric,
+                self.metric.matching_threshold,
+                self.max_age,
+                &self.tracks,
+                detections,
+                Some(confirmed_tracks),
+                None,
+            );
 
         // Associate remaining tracks together with unconfirmed tracks using IOU.
         let iou_track_candidates = [
@@ -190,7 +201,7 @@ impl Tracker {
 
         let (matches_b, unmatched_tracks_b, unmatched_detections) =
             linear_assignment::min_cost_matching(
-                Box::new(iou_matching::iou_cost),
+                Rc::new(iou_matching::iou_cost),
                 self.max_iou_distance,
                 &self.tracks,
                 detections,
