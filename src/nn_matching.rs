@@ -130,24 +130,26 @@ impl NearestNeighborDistanceMetric {
         targets: &Array1<usize>,
         active_targets: &[usize],
     ) {
-        Zip::from(features.rows())
-            .and(targets)
-            .for_each(|feature, target| {
-                // let feature = Array1::from_iter(feature.into_iter().cloned());
-                match self.samples.get_mut(target) {
-                    Some(target_features) => {
-                        target_features.push_row(feature).unwrap();
-                        if let Some(budget) = &self.budget {
-                            target_features.slice(s![-budget.., ..]);
+        if features.ncols() != 0 {
+            Zip::from(features.rows())
+                .and(targets)
+                .for_each(|feature, target| {
+                    // let feature = Array1::from_iter(feature.into_iter().cloned());
+                    match self.samples.get_mut(target) {
+                        Some(target_features) => {
+                            target_features.push_row(feature).unwrap();
+                            if let Some(budget) = &self.budget {
+                                target_features.slice(s![-budget.., ..]);
+                            }
+                        }
+                        None => {
+                            let mut target_features = Array2::<f32>::zeros((0, 128));
+                            target_features.push_row(feature).unwrap();
+                            self.samples.insert(target.to_owned(), target_features);
                         }
                     }
-                    None => {
-                        let mut target_features = Array2::<f32>::zeros((0, 128));
-                        target_features.push_row(feature).unwrap();
-                        self.samples.insert(target.to_owned(), target_features);
-                    }
-                }
-            });
+                });
+        }
 
         self.samples.retain(|k, _| active_targets.contains(k));
     }
@@ -191,6 +193,7 @@ mod tests {
     #[test]
     fn partial_fit() {
         let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.5, None);
+        metric.partial_fit(&array![[]], &array![], &vec![]);
 
         metric.partial_fit(
             &stack![

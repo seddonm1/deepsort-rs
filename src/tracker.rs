@@ -112,6 +112,7 @@ impl Tracker {
                 targets.push(track.track_id);
                 track.features = Array2::zeros((0, 128));
             });
+
         self.metric
             .partial_fit(&features, &ArrayBase::from(targets), &active_targets)
     }
@@ -240,13 +241,17 @@ mod tests {
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
-        &tracker.predict();
-
-        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
-        &tracker.update(&[d0]);
-
-        for track in tracker.tracks {
-            println!("{:?}", track);
+        for i in 0..100 {
+            let d = Detection::new(
+                arr1::<f32>(&[4.0 + (i as f32 * 0.5), 5.0 + (i as f32 * 0.5), 5.0, 6.0]),
+                1.0,
+                Array::range(0.0 + (i as f32 * 0.1), 128.0 + (i as f32 * 0.1), 1.0),
+            );
+            &tracker.predict();
+            &tracker.update(&[d]);
+            for track in &tracker.tracks {
+                println!("{}: {:?} {:?}", i, track.track_id, track.state);
+            }
         }
     }
 }
