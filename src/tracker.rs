@@ -114,12 +114,15 @@ impl Tracker {
             .partial_fit(&features, &ArrayBase::from(targets), &active_targets)
     }
 
-    fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
-        let gated_metric = |tracks: &[Track],
+    fn match_impl(&'static self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
+        let gated_metric = Box::new(|tracks: &[Track],
                             dets: &[Detection],
-                            track_indices: Vec<usize>,
-                            detection_indices: Vec<usize>|
+                            track_indices: Option<Vec<usize>>,
+                            detection_indices: Option<Vec<usize>>|
          -> Array2<f32> {
+            let detection_indices = detection_indices.unwrap();
+            let track_indices = track_indices.unwrap();
+
             let mut features = arr2::<f32, _>(&[[]]);
             detection_indices.iter().for_each(|i| {
                 features
@@ -132,14 +135,17 @@ impl Tracker {
                 .collect::<Vec<usize>>();
             let cost_matrix = self.metric.distance(&features, &targets);
 
-            // // cost_matrix = linear_assignment.gate_cost_matrix(
-            // //     self.kf, cost_matrix, tracks, dets, track_indices,
-            // //     detection_indices)
-
-            // // return cost_matrix
-
-            array![[]]
-        };
+            linear_assignment::gate_cost_matrix(
+                self.kf.clone(),
+                cost_matrix,
+                tracks,
+                dets,
+                track_indices,
+                detection_indices,
+                None,
+                None,
+            )
+        });
 
         // Split track set into confirmed and unconfirmed tracks.
         let confirmed_tracks: Vec<usize> = self
@@ -158,9 +164,9 @@ impl Tracker {
             .collect();
 
         // Associate confirmed tracks using appearance features.
-        // let (matches_a, unmatched_tracks_a, unmatched_detections) = linear_assignment::matching_cascade(
-        //         gated_metric, self.metric.matching_threshold, self.max_age,
-        //         &self.tracks, detections, Some(confirmed_tracks), None);
+        let (matches_a, unmatched_tracks_a, unmatched_detections) = linear_assignment::matching_cascade(
+                gated_metric, self.metric.matching_threshold, self.max_age,
+                &self.tracks, detections, Some(confirmed_tracks), None);
         let matches_a: Vec<Match> = vec![];
         let unmatched_tracks_a: Vec<usize> = vec![];
         let unmatched_detections: Vec<usize> = vec![];
@@ -182,13 +188,15 @@ impl Tracker {
             .map(|v| v.to_owned())
             .collect::<Vec<usize>>();
 
-        // matches_b, unmatched_tracks_b, unmatched_detections = \
-        // linear_assignment.min_cost_matching(
-        //     iou_matching.iou_cost, self.max_iou_distance, self.tracks,
-        //     detections, iou_track_candidates, unmatched_detections)
-        let matches_b: Vec<Match> = vec![];
-        let unmatched_tracks_b: Vec<usize> = vec![];
-        let unmatched_detections: Vec<usize> = vec![];
+        let (matches_b, unmatched_tracks_b, unmatched_detections) =
+            linear_assignment::min_cost_matching(
+                Box::new(iou_matching::iou_cost),
+                self.max_iou_distance,
+                &self.tracks,
+                detections,
+                Some(iou_track_candidates),
+                Some(unmatched_detections),
+            );
 
         let matches = [matches_a, matches_b].concat();
         let mut unmatched_tracks = [unmatched_tracks_a, unmatched_tracks_b].concat();

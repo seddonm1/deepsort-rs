@@ -61,12 +61,12 @@ Returns
     * A list of unmatched detection indices.
 */
 pub fn min_cost_matching(
-    distance_metric: fn(
+    distance_metric: Box<dyn Fn(
         &[Track],
         &[Detection],
         Option<Vec<usize>>,
         Option<Vec<usize>>,
-    ) -> Array2<f32>,
+    ) -> Array2<f32>>,
     max_distance: f32,
     tracks: &[Track],
     detections: &[Detection],
@@ -173,12 +173,12 @@ Returns
     * A list of unmatched detection indices.
 */
 pub fn matching_cascade(
-    distance_metric: fn(
+    distance_metric: Box<dyn Fn(
         &[Track],
         &[Detection],
         Option<Vec<usize>>,
         Option<Vec<usize>>,
-    ) -> Array2<f32>,
+    ) -> Array2<f32>>,
     max_distance: f32,
     cascade_depth: usize,
     tracks: &[Track],
@@ -343,7 +343,7 @@ mod tests {
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
-                iou_matching::iou_cost,
+                Box::new(iou_matching::iou_cost),
                 0.7,
                 &[t0, t1, t2, t3, t4, t5],
                 &[d0, d1, d2, d3, d4, d5],
@@ -391,7 +391,7 @@ mod tests {
 
         let (matches, mut unmatched_tracks, mut unmatched_detections) =
             linear_assignment::matching_cascade(
-                iou_matching::iou_cost,
+                Box::new(iou_matching::iou_cost),
                 0.7,
                 30,
                 &[t0, t1, t2, t3, t4, t5],
@@ -427,6 +427,9 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(cost_matrix, arr2::<f32, _>(&[[f32::MAX, 0.53]]));
+        assert_eq!(
+            cost_matrix,
+            arr2::<f32, _>(&[[f32::MAX, 0.53]])
+        );
     }
 }
