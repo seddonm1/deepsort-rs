@@ -1,4 +1,4 @@
-use crate::{Detection, KalmanFilter, NearestNeighborDistanceMetric, Track, Match};
+use crate::*;
 
 use ndarray::*;
 
@@ -76,13 +76,15 @@ impl Tracker {
         A list of detections at the current time step.
     */
     pub fn update(&mut self, detections: Vec<Detection>) {
-
         // Run matching cascade.
         let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(&detections);
 
         // Update track set.
         for m in matches {
-            self.tracks.get_mut(m.track_idx).unwrap().update(&self.kf, detections.get(m.detection_idx).unwrap());
+            self.tracks
+                .get_mut(m.track_idx)
+                .unwrap()
+                .update(&self.kf, detections.get(m.detection_idx).unwrap());
         }
         for unmatched_track in unmatched_tracks {
             self.tracks.get_mut(unmatched_track).unwrap().mark_missed();
@@ -92,13 +94,27 @@ impl Tracker {
         }
 
         // Update distance metric.
-        let active_targets: Vec<usize> = self.tracks.iter().filter(|track| track.is_confirmed()).map(|track| track.track_id).collect();
-
-        self.tracks.iter_mut().filter(|track| track.is_confirmed())
-
+        let active_targets: Vec<usize> = self
+            .tracks
+            .iter()
+            .filter(|track| track.is_confirmed())
+            .map(|track| track.track_id)
+            .collect();
+        let mut features = arr2::<f32, _>(&[[]]);
+        let mut targets: Vec<usize> = vec![];
+        self.tracks
+            .iter_mut()
+            .filter(|track| track.is_confirmed())
+            .for_each(|track| {
+                features = concatenate![Axis(0), features, track.features];
+                targets.push(track.track_id);
+                track.features = Array2::zeros((0, 128));
+            });
+        self.metric
+            .partial_fit(&features, &ArrayBase::from(targets), &active_targets)
     }
 
-    fn match_impl(&self, detections: &Vec<Detection>) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
+    fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
         // fn gated_metric(tracks: Vec<Track>) -> Array2<f32> {
         //     arr2::<f32, _>(&[[]])
         // }

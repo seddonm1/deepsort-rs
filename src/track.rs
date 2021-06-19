@@ -28,7 +28,7 @@ pub struct Track {
     hits: usize,
     age: usize,
     pub time_since_update: usize,
-    features: Array2<f32>,
+    pub features: Array2<f32>,
 }
 
 /**
@@ -98,19 +98,19 @@ impl Track {
         }
     }
 
-    fn to_tlwh(&self) -> Array1<f32> {
+    pub fn to_tlwh(&self) -> Array1<f32> {
         let w = self.mean[2] * self.mean[3];
         let h = self.mean[3];
         let t = self.mean[0] - (w / 2.0);
         let l = self.mean[1] - (h / 2.0);
-        array![t, l, w, h]
+        arr1::<f32>(&[t, l, w, h])
     }
 
-    fn to_tlbr(&self) -> Array1<f32> {
-        let mut tlwh = self.to_tlwh();
-        tlwh[2] += tlwh[0];
-        tlwh[3] += tlwh[1];
-        tlwh
+    pub fn to_tlbr(&self) -> Array1<f32> {
+        let mut tlbr = self.to_tlwh();
+        tlbr[2] += tlbr[0];
+        tlbr[3] += tlbr[1];
+        tlbr
     }
 
     /**

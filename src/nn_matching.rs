@@ -171,7 +171,6 @@ impl NearestNeighborDistanceMetric {
     */
     pub fn distance(&self, features: &Array2<f32>, targets: &[usize]) -> Array2<f32> {
         let mut cost_matrix = Array2::<f32>::zeros((0, features.nrows()));
-
         targets.iter().for_each(|target| {
             cost_matrix
                 .push_row(

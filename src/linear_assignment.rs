@@ -1,3 +1,5 @@
+use crate::*;
+
 use ndarray::*;
 
 #[derive(Debug, Clone)]
@@ -48,8 +50,17 @@ impl Match {
 //     * A list of unmatched track indices.
 //     * A list of unmatched detection indices.
 // */
-// pub fn min_cost_matching(max_distance: f32, tracks: Vec<Track>, detections: Vec<Detection>, track_indices: Option<Vec<usize>>, detection_indices: Option<Vec<usize>>) {
+// pub fn min_cost_matching(distance_metric: fn(Vec<Track>, Vec<Detection>, Option<Vec<usize>>, Option<Vec<usize>>), max_distance: f32, tracks: Vec<Track>, detections: Vec<Detection>, track_indices: Option<Vec<usize>>, detection_indices: Option<Vec<usize>>) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
 
+//     let track_indices = track_indices.unwrap_or((0..tracks.len()).collect());
+//     let detection_indices = detection_indices.unwrap_or((0..detections.len()).collect());
+
+//     if detection_indices.len() == 0 || track_indices.len() == 0 {
+//         // Nothing to match.
+//         (vec![], track_indices, detection_indices)
+//     } else {
+
+//     }
 // }
 
 // #[cfg(test)]

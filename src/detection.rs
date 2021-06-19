@@ -23,7 +23,7 @@ feature : ndarray | NoneType
 */
 #[derive(Debug, Clone)]
 pub struct Detection {
-    tlwh: Array1<f32>,
+    pub tlwh: Array1<f32>,
     confidence: f32,
     pub feature: Array1<f32>,
 }
@@ -40,7 +40,7 @@ impl Detection {
     /**
     Convert bounding box to format `(min x, min y, max x, max y)`, i.e., `(top left, bottom right)`.
     */
-    fn to_tlbr(&self) -> Array1<f32> {
+    pub fn to_tlbr(&self) -> Array1<f32> {
         array![
             self.tlwh[0],
             self.tlwh[1],
