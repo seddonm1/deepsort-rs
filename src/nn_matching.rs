@@ -134,7 +134,6 @@ impl NearestNeighborDistanceMetric {
             Zip::from(features.rows())
                 .and(targets)
                 .for_each(|feature, target| {
-                    // let feature = Array1::from_iter(feature.into_iter().cloned());
                     match self.samples.get_mut(target) {
                         Some(target_features) => {
                             target_features.push_row(feature).unwrap();

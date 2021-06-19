@@ -102,6 +102,7 @@ impl Tracker {
             .filter(|track| track.is_confirmed())
             .map(|track| track.track_id)
             .collect();
+
         let mut features = Array2::<f32>::zeros((0, 128));
         let mut targets: Vec<usize> = vec![];
         self.tracks
@@ -109,7 +110,9 @@ impl Tracker {
             .filter(|track| track.is_confirmed())
             .for_each(|track| {
                 features = concatenate![Axis(0), features, track.features];
-                targets.push(track.track_id);
+                for _ in 0..track.features.nrows() {
+                    targets.push(track.track_id);
+                }
                 track.features = Array2::zeros((0, 128));
             });
 
@@ -130,7 +133,7 @@ impl Tracker {
                 let detection_indices = detection_indices.unwrap();
                 let track_indices = track_indices.unwrap();
 
-                let mut features = arr2::<f32, _>(&[[]]);
+                let mut features = Array2::<f32>::zeros((0, 128));
                 detection_indices.iter().for_each(|i| {
                     features
                         .push_row(dets.get(*i).unwrap().feature.view())
@@ -241,7 +244,7 @@ mod tests {
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
-        for i in 0..100 {
+        for i in 0..50 {
             let d = Detection::new(
                 arr1::<f32>(&[4.0 + (i as f32 * 0.5), 5.0 + (i as f32 * 0.5), 5.0, 6.0]),
                 1.0,
@@ -250,7 +253,7 @@ mod tests {
             &tracker.predict();
             &tracker.update(&[d]);
             for track in &tracker.tracks {
-                println!("{}: {:?} {:?}", i, track.track_id, track.state);
+                println!("{}: {:?} {:?} {:?} {:?}", i, track.track_id, track.state, track.to_tlwh(), track.features.nrows());
             }
         }
     }
