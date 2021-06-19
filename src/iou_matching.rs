@@ -2,7 +2,6 @@ use crate::*;
 
 use ndarray::*;
 
-
 /**
 Computer intersection over union.
 
@@ -14,14 +13,14 @@ candidates : ndarray
     A matrix of candidate bounding boxes (one per row) in the same format
     as `bbox`.
 
-    Returns
+Returns
 -------
 ndarray
     The intersection over union in [0, 1] between the `bbox` and each
     candidate. A higher score means a larger fraction of the `bbox` is
     occluded by the candidate.
 */
-pub fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
+fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
     let bbox_tl = bbox.slice(s![..2]).to_owned();
     let bbox_br = &bbox_tl + bbox.slice(s![2..4]).to_owned();
     let candidates_tl = candidates.slice(s![.., 0..2]).to_owned();

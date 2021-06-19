@@ -417,19 +417,19 @@ mod tests {
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
         let (mean, covariance) =
             kf.clone()
-                .update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+                .update(&mean, &covariance, &arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
 
         assert_eq!(
             mean,
             arr1::<f32>(&[
-                1.8677686f32,
-                2.8677688f32,
-                3.0196078f32,
-                4.867769f32,
-                0.20661156f32,
-                0.20661156f32,
-                0.000000009803921f32,
-                0.20661156f32
+                1.8677686,
+                2.8677688,
+                3.0196078,
+                4.867769,
+                0.20661156,
+                0.20661156,
+                0.000000009803921,
+                0.20661156
             ]),
         );
         assert_eq!(

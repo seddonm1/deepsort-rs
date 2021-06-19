@@ -198,10 +198,11 @@ pub fn matching_cascade(
             break;
         }
 
-        let track_indices_l = &track_indices
+        let track_indices_l = track_indices
             .iter()
             .filter(|track_idx| tracks.get(**track_idx).unwrap().time_since_update == 1 + level)
-            .collect::<Vec<&usize>>();
+            .cloned()
+            .collect::<Vec<usize>>();
         if track_indices_l.is_empty() {
             // nothing to match at this level
             continue;
@@ -212,12 +213,13 @@ pub fn matching_cascade(
             max_distance,
             tracks,
             detections,
-            Some(track_indices.to_owned()),
+            Some(track_indices_l),
             Some(detection_indices.to_owned()),
         );
         matches.extend_from_slice(&matches_l);
         unmatched_detections = unmatched_detections_l;
     }
+
     let unmatched_tracks = track_indices
         .iter()
         .cloned()
@@ -227,6 +229,7 @@ pub fn matching_cascade(
         .iter()
         .map(|v| *v.to_owned())
         .collect::<Vec<usize>>();
+
     (matches, unmatched_tracks, unmatched_detections)
 }
 
@@ -315,15 +318,19 @@ mod tests {
             arr1::<f32>(&[]),
         );
 
-        let (matches, unmatched_tracks, unmatched_detections) = linear_assignment::matching_cascade(
-            iou_matching::iou_cost,
-            0.7,
-            30,
-            &vec![t0, t1, t2, t3, t4, t5],
-            &vec![d0, d1, d2, d3, d4, d5],
-            None,
-            None,
-        );
+        let (matches, mut unmatched_tracks, mut unmatched_detections) =
+            linear_assignment::matching_cascade(
+                iou_matching::iou_cost,
+                0.7,
+                30,
+                &vec![t0, t1, t2, t3, t4, t5],
+                &vec![d0, d1, d2, d3, d4, d5],
+                None,
+                None,
+            );
+
+        unmatched_tracks.sort_unstable();
+        unmatched_detections.sort_unstable();
 
         assert_eq!(matches, vec![Match::new(0, 2)]);
         assert_eq!(unmatched_tracks, vec![1, 2, 3, 4, 5]);
