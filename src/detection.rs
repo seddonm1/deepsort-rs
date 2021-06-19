@@ -23,9 +23,9 @@ feature : ndarray | NoneType
 */
 #[derive(Debug, Clone)]
 pub struct Detection {
-    pub tlwh: Array1<f32>,
+    tlwh: Array1<f32>,
     confidence: f32,
-    pub feature: Array1<f32>,
+    feature: Array1<f32>,
 }
 
 impl Detection {
@@ -35,6 +35,20 @@ impl Detection {
             confidence,
             feature,
         }
+    }
+
+    /**
+    Return the top, left, width, heigh of the detection
+    */
+    pub fn tlwh(&self) -> &Array1<f32> {
+        &self.tlwh
+    }
+
+    /**
+    Return the feature array of the detection
+    */
+    pub fn feature(&self) -> &Array1<f32> {
+        &self.feature
     }
 
     /**

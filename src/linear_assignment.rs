@@ -9,8 +9,8 @@ use pathfinding::matrix::Matrix;
 
 #[derive(Debug, Clone)]
 pub struct Match {
-    pub track_idx: usize,
-    pub detection_idx: usize,
+    track_idx: usize,
+    detection_idx: usize,
 }
 
 impl Match {
@@ -19,6 +19,20 @@ impl Match {
             track_idx,
             detection_idx,
         }
+    }
+
+    /**
+    Return the track identifier of the match
+    */
+    pub fn track_idx(&self) -> usize {
+        self.track_idx
+    }
+
+    /**
+    Return the detection identifier of the match
+    */
+    pub fn detection_idx(&self) -> usize {
+        self.detection_idx
     }
 }
 
@@ -61,6 +75,7 @@ Returns
     * A list of unmatched track indices.
     * A list of unmatched detection indices.
 */
+#[allow(clippy::type_complexity)]
 pub fn min_cost_matching(
     distance_metric: Rc<
         dyn Fn(&[Track], &[Detection], Option<Vec<usize>>, Option<Vec<usize>>) -> Array2<f32>,
@@ -170,6 +185,7 @@ Returns
     * A list of unmatched track indices.
     * A list of unmatched detection indices.
 */
+#[allow(clippy::type_complexity)]
 pub fn matching_cascade(
     distance_metric: Rc<
         dyn Fn(&[Track], &[Detection], Option<Vec<usize>>, Option<Vec<usize>>) -> Array2<f32>,
@@ -195,7 +211,7 @@ pub fn matching_cascade(
 
         let track_indices_l = track_indices
             .iter()
-            .filter(|track_idx| tracks.get(**track_idx).unwrap().time_since_update == 1 + level)
+            .filter(|track_idx| *tracks.get(**track_idx).unwrap().time_since_update() == 1 + level)
             .cloned()
             .collect::<Vec<usize>>();
         if track_indices_l.is_empty() {
@@ -290,7 +306,7 @@ pub fn gate_cost_matrix(
         .for_each(|(row, track_idx)| {
             let track = tracks.get(*track_idx).unwrap();
             let gating_distance =
-                kf.gating_distance(&track.mean, &track.covariance, &measurements)[0];
+                kf.gating_distance(&track.mean(), &track.covariance(), &measurements)[0];
             if gating_distance > *gating_threshold {
                 cost_matrix[[row, 0]] = gated_cost;
             }

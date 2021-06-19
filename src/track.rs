@@ -19,15 +19,15 @@ pub enum TrackState {
 
 #[derive(Debug)]
 pub struct Track {
-    pub state: TrackState,
-    pub mean: Array1<f32>,
-    pub covariance: Array2<f32>,
-    pub track_id: usize,
+    state: TrackState,
+    mean: Array1<f32>,
+    covariance: Array2<f32>,
+    track_id: usize,
     n_init: usize,
     max_age: usize,
     hits: usize,
     age: usize,
-    pub time_since_update: usize,
+    time_since_update: usize,
     pub features: Array2<f32>,
 }
 
@@ -94,8 +94,43 @@ impl Track {
             hits: 1,
             age: 1,
             time_since_update: 0,
-            features: feature.unwrap_or_else(|| Array2::zeros((0, 128))),
+            features: feature.unwrap_or_else(|| Array2::<f32>::zeros((0, 128))),
         }
+    }
+
+    /**
+    Return the identifier of the track
+    */
+    pub fn track_id(&self) -> &usize {
+        &self.track_id
+    }
+
+    /**
+    Return the TrackState of the track
+    */
+    pub fn state(&self) -> &TrackState {
+        &self.state
+    }
+
+    /**
+    Return the time since update of the track
+    */
+    pub fn time_since_update(&self) -> &usize {
+        &self.time_since_update
+    }
+
+    /**
+    Return the mean of the track
+    */
+    pub fn mean(&self) -> &Array1<f32> {
+        &self.mean
+    }
+
+    /**
+    Return the covariance of the track
+    */
+    pub fn covariance(&self) -> &Array2<f32> {
+        &self.covariance
     }
 
     pub fn to_tlwh(&self) -> Array1<f32> {
@@ -146,7 +181,7 @@ impl Track {
         self.mean = mean;
         self.covariance = covariance;
 
-        self.features.push_row(detection.feature.view()).unwrap();
+        self.features.push_row(detection.feature().view()).unwrap();
 
         self.hits += 1;
         self.time_since_update = 0;
@@ -156,25 +191,33 @@ impl Track {
         }
     }
 
-    /// Mark this track as missed (no association at the current time step).
+    /**
+    Mark this track as missed (no association at the current time step).
+     */
     pub fn mark_missed(&mut self) {
         if matches!(self.state, TrackState::Tentative) || self.time_since_update > self.max_age {
             self.state = TrackState::Deleted;
         }
     }
 
-    /// Returns True if this track is tentative (unconfirmed).
+    /**
+    Returns True if this track is tentative (unconfirmed).
+    */
     #[allow(dead_code)]
     fn is_tentative(&self) -> bool {
         matches!(self.state, TrackState::Tentative)
     }
 
-    /// Returns True if this track is confirmed.
+    /**
+    Returns True if this track is confirmed.
+    */
     pub fn is_confirmed(&self) -> bool {
         matches!(self.state, TrackState::Confirmed)
     }
 
-    /// Returns True if this track is dead and should be deleted.
+    /**
+    Returns True if this track is dead and should be deleted.
+    */
     #[allow(dead_code)]
     fn is_deleted(&self) -> bool {
         matches!(self.state, TrackState::Deleted)

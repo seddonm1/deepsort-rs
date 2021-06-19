@@ -33,7 +33,7 @@ tracks : List[Track]
 */
 #[derive(Debug)]
 pub struct Tracker {
-    metric: NearestNeighborDistanceMetric,
+    pub metric: NearestNeighborDistanceMetric,
     max_iou_distance: f32,
     max_age: usize,
     n_init: usize,
@@ -84,9 +84,9 @@ impl Tracker {
         // Update track set.
         for m in matches {
             self.tracks
-                .get_mut(m.track_idx)
+                .get_mut(m.track_idx())
                 .unwrap()
-                .update(&self.kf, detections.get(m.detection_idx).unwrap());
+                .update(&self.kf, detections.get(m.detection_idx()).unwrap());
         }
         for unmatched_track in unmatched_tracks {
             self.tracks.get_mut(unmatched_track).unwrap().mark_missed();
@@ -100,7 +100,7 @@ impl Tracker {
             .tracks
             .iter()
             .filter(|track| track.is_confirmed())
-            .map(|track| track.track_id)
+            .map(|track| *track.track_id())
             .collect();
 
         let mut features = Array2::<f32>::zeros((0, 128));
@@ -111,7 +111,7 @@ impl Tracker {
             .for_each(|track| {
                 features = concatenate![Axis(0), features, track.features];
                 for _ in 0..track.features.nrows() {
-                    targets.push(track.track_id);
+                    targets.push(*track.track_id());
                 }
                 track.features = Array2::zeros((0, 128));
             });
@@ -136,12 +136,12 @@ impl Tracker {
                 let mut features = Array2::<f32>::zeros((0, 128));
                 detection_indices.iter().for_each(|i| {
                     features
-                        .push_row(dets.get(*i).unwrap().feature.view())
+                        .push_row(dets.get(*i).unwrap().feature().view())
                         .unwrap()
                 });
                 let targets = track_indices
                     .iter()
-                    .map(|i| tracks.get(*i).unwrap().track_id)
+                    .map(|i| *tracks.get(*i).unwrap().track_id())
                     .collect::<Vec<usize>>();
                 let cost_matrix = metric.distance(&features, &targets);
 
@@ -178,7 +178,7 @@ impl Tracker {
         let (matches_a, unmatched_tracks_a, unmatched_detections) =
             linear_assignment::matching_cascade(
                 gated_metric,
-                self.metric.matching_threshold,
+                self.metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
                 detections,
@@ -191,7 +191,7 @@ impl Tracker {
             unconfirmed_tracks,
             unmatched_tracks_a
                 .iter()
-                .filter(|k| self.tracks.get(**k).unwrap().time_since_update == 0)
+                .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() == 0)
                 .map(|v| v.to_owned())
                 .collect::<Vec<usize>>(),
         ]
@@ -199,7 +199,7 @@ impl Tracker {
 
         let unmatched_tracks_a = unmatched_tracks_a
             .iter()
-            .filter(|k| self.tracks.get(**k).unwrap().time_since_update != 0)
+            .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 0)
             .map(|v| v.to_owned())
             .collect::<Vec<usize>>();
 
@@ -228,7 +228,7 @@ impl Tracker {
             self.next_id,
             self.n_init,
             self.max_age,
-            Some(stack![Axis(0), detection.feature]),
+            Some(stack![Axis(0), *detection.feature()]),
         ));
         self.next_id += 1;
     }
@@ -253,7 +253,18 @@ mod tests {
             &tracker.predict();
             &tracker.update(&[d]);
             for track in &tracker.tracks {
-                println!("{}: {:?} {:?} {:?} {:?}", i, track.track_id, track.state, track.to_tlwh(), track.features.nrows());
+                println!(
+                    "{}: {:?} {:?} {:?} {:?}",
+                    i,
+                    track.track_id(),
+                    track.state(),
+                    track.to_tlwh(),
+                    tracker
+                        .metric
+                        .features(*track.track_id())
+                        .unwrap_or(&Array2::<f32>::zeros((0, 128)))
+                        .nrows()
+                );
             }
         }
     }

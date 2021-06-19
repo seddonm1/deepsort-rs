@@ -88,7 +88,7 @@ samples : Dict[int -> List[ndarray]]
 #[derive(Debug, Clone)]
 pub struct NearestNeighborDistanceMetric {
     metric: fn(Array2<f32>, Array2<f32>) -> Array1<f32>,
-    pub matching_threshold: f32,
+    matching_threshold: f32,
     budget: Option<i32>,
     samples: HashMap<usize, Array2<f32>>,
 }
@@ -113,6 +113,20 @@ impl NearestNeighborDistanceMetric {
     }
 
     /**
+    Return the matching threshold
+    */
+    pub fn matching_threshold(&self) -> f32 {
+        self.matching_threshold
+    }
+
+    /**
+    Return the stored feature vectors for a given track identifier
+    */
+    pub fn features(&self, track_id: usize) -> Option<&Array2<f32>> {
+        self.samples.get(&track_id)
+    }
+
+    /**
     Update the distance metric with new data.
 
     Parameters
@@ -133,19 +147,17 @@ impl NearestNeighborDistanceMetric {
         if features.ncols() != 0 {
             Zip::from(features.rows())
                 .and(targets)
-                .for_each(|feature, target| {
-                    match self.samples.get_mut(target) {
-                        Some(target_features) => {
-                            target_features.push_row(feature).unwrap();
-                            if let Some(budget) = &self.budget {
-                                target_features.slice(s![-budget.., ..]);
-                            }
+                .for_each(|feature, target| match self.samples.get_mut(target) {
+                    Some(target_features) => {
+                        target_features.push_row(feature).unwrap();
+                        if let Some(budget) = &self.budget {
+                            target_features.slice(s![-budget.., ..]);
                         }
-                        None => {
-                            let mut target_features = Array2::<f32>::zeros((0, 128));
-                            target_features.push_row(feature).unwrap();
-                            self.samples.insert(target.to_owned(), target_features);
-                        }
+                    }
+                    None => {
+                        let mut target_features = Array2::<f32>::zeros((0, 128));
+                        target_features.push_row(feature).unwrap();
+                        self.samples.insert(target.to_owned(), target_features);
                     }
                 });
         }

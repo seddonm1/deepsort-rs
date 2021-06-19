@@ -81,7 +81,7 @@ pub fn iou_cost(
     track_indices.iter().for_each(|track_idx| {
         let track = tracks.get(*track_idx).unwrap();
 
-        if track.time_since_update > 1 {
+        if *track.time_since_update() > 1 {
             cost_matrix
                 .push_row(Array1::from_elem(detection_indices.len(), f32::MAX).view())
                 .unwrap();
@@ -90,7 +90,10 @@ pub fn iou_cost(
             let mut candidates = Array2::<f32>::zeros((0, 4));
             detection_indices.iter().for_each(|detection_idx| {
                 candidates
-                    .push(Axis(0), detections.get(*detection_idx).unwrap().tlwh.view())
+                    .push(
+                        Axis(0),
+                        detections.get(*detection_idx).unwrap().tlwh().view(),
+                    )
                     .unwrap()
             });
 
