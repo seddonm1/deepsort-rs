@@ -9,7 +9,7 @@ lazy_static! {
     freedom (contains values for N=1, ..., 9). Taken from MATLAB/Octave's chi2inv
     function and used as Mahalanobis gating threshold.
     */
-    static ref CHI2INV95: HashMap<usize, f32> = {
+    pub static ref CHI2INV95: HashMap<usize, f32> = {
         let mut m = HashMap::new();
         m.insert(1, 3.8415);
         m.insert(2, 5.9915);

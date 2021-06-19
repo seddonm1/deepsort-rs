@@ -233,6 +233,77 @@ pub fn matching_cascade(
     (matches, unmatched_tracks, unmatched_detections)
 }
 
+/**
+Invalidate infeasible entries in cost matrix based on the state
+distributions obtained by Kalman filtering.
+
+Parameters
+----------
+kf : The Kalman filter.
+cost_matrix : ndarray
+    The NxM dimensional cost matrix, where N is the number of track indices
+    and M is the number of detection indices, such that entry (i, j) is the
+    association cost between `tracks[track_indices[i]]` and
+    `detections[detection_indices[j]]`.
+tracks : List[track.Track]
+    A list of predicted tracks at the current time step.
+detections : List[detection.Detection]
+    A list of detections at the current time step.
+track_indices : List[int]
+    List of track indices that maps rows in `cost_matrix` to tracks in
+    `tracks` (see description above).
+detection_indices : List[int]
+    List of detection indices that maps columns in `cost_matrix` to
+    detections in `detections` (see description above).
+gated_cost : Optional[float]
+    Entries in the cost matrix corresponding to infeasible associations are
+    set this value. Defaults to a very large value.
+only_position : Optional[bool]
+    If True, only the x, y position of the state distribution is considered
+    during gating. Defaults to False.
+
+Returns
+-------
+ndarray
+    Returns the modified cost matrix.
+*/
+#[allow(clippy::too_many_arguments)]
+pub fn gate_cost_matrix(
+    kf: KalmanFilter,
+    mut cost_matrix: Array2<f32>,
+    tracks: &[Track],
+    detections: &[Detection],
+    track_indices: Vec<usize>,
+    detection_indices: Vec<usize>,
+    gated_cost: Option<f32>,
+    only_position: Option<bool>,
+) -> Array2<f32> {
+    let gated_cost = gated_cost.unwrap_or(f32::MAX);
+    let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
+    let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
+
+    let mut measurements = Array2::zeros((0, 4));
+    detection_indices.iter().for_each(|i| {
+        measurements
+            .push_row(detections.get(*i).unwrap().to_xyah().view())
+            .unwrap()
+    });
+
+    track_indices
+        .iter()
+        .enumerate()
+        .for_each(|(row, track_idx)| {
+            let track = tracks.get(*track_idx).unwrap();
+            let gating_distance =
+                kf.gating_distance(&track.mean, &track.covariance, &measurements)[0];
+            if gating_distance > *gating_threshold {
+                cost_matrix[[row, 0]] = gated_cost;
+            }
+        });
+
+    cost_matrix
+}
+
 #[cfg(test)]
 mod tests {
     use crate::*;
@@ -274,8 +345,8 @@ mod tests {
             linear_assignment::min_cost_matching(
                 iou_matching::iou_cost,
                 0.7,
-                &vec![t0, t1, t2, t3, t4, t5],
-                &vec![d0, d1, d2, d3, d4, d5],
+                &[t0, t1, t2, t3, t4, t5],
+                &[d0, d1, d2, d3, d4, d5],
                 None,
                 None,
             );
@@ -323,8 +394,8 @@ mod tests {
                 iou_matching::iou_cost,
                 0.7,
                 30,
-                &vec![t0, t1, t2, t3, t4, t5],
-                &vec![d0, d1, d2, d3, d4, d5],
+                &[t0, t1, t2, t3, t4, t5],
+                &[d0, d1, d2, d3, d4, d5],
                 None,
                 None,
             );
@@ -335,5 +406,27 @@ mod tests {
         assert_eq!(matches, vec![Match::new(0, 2)]);
         assert_eq!(unmatched_tracks, vec![1, 2, 3, 4, 5]);
         assert_eq!(unmatched_detections, vec![0, 1, 3, 4, 5]);
+    }
+
+    #[test]
+    fn gate_cost_matrix() {
+        let kf = KalmanFilter::new();
+
+        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
+        let t0 = Track::new(mean, covariance, 0, 0, 30, None);
+
+        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
+
+        let cost_matrix = linear_assignment::gate_cost_matrix(
+            kf,
+            arr2::<f32, _>(&[[0.2, 0.53]]),
+            &[t0],
+            &[d0],
+            vec![0],
+            vec![0],
+            None,
+            None,
+        );
+        assert_eq!(cost_matrix, arr2::<f32, _>(&[[f32::MAX, 0.53]]));
     }
 }
