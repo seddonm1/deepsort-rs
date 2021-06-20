@@ -81,6 +81,11 @@ impl Tracker {
         // Run matching cascade.
         let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(detections);
 
+        println!(
+            "update: {:?} {:?} {:?}",
+            matches, unmatched_tracks, unmatched_detections
+        );
+
         // Update track set.
         for m in matches {
             self.tracks
@@ -143,6 +148,7 @@ impl Tracker {
                     .iter()
                     .map(|i| *tracks.get(*i).unwrap().track_id())
                     .collect::<Vec<usize>>();
+
                 let cost_matrix = metric.distance(&features, &targets);
 
                 linear_assignment::gate_cost_matrix(
@@ -185,6 +191,10 @@ impl Tracker {
                 Some(confirmed_tracks),
                 None,
             );
+        println!(
+            "a: {:?} {:?} {:?}",
+            matches_a, unmatched_tracks_a, unmatched_detections
+        );
 
         // Associate remaining tracks together with unconfirmed tracks using IOU.
         let iou_track_candidates = [
@@ -212,6 +222,11 @@ impl Tracker {
                 Some(iou_track_candidates),
                 Some(unmatched_detections),
             );
+
+        println!(
+            "b: {:?} {:?} {:?}",
+            matches_b, unmatched_tracks_b, unmatched_detections
+        );
 
         let matches = [matches_a, matches_b].concat();
         let mut unmatched_tracks = [unmatched_tracks_a, unmatched_tracks_b].concat();
@@ -252,14 +267,21 @@ mod tests {
     fn tracker() {
         // deterministic generator
         let mut rng = Pcg32::seed_from_u64(0);
+        let mut rnd = Vec::<f32>::with_capacity(500);
+        for _ in 0..1000 {
+            rnd.push(next_f32(&mut rng));
+        }
+        // println!("{:?}", random);
 
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
-        for i in 0..1 {
+        for i in 0..6 {
+            println!("{} ---------------------------", i);
+
             // move up to right
-            let d0_x = 0.0 + (i as f32 * 1.0) + next_f32(&mut rng);
-            let d0_y = 0.0 + (i as f32 * 1.0) + next_f32(&mut rng);
+            let d0_x = 0.0 + (i as f32) + rnd.pop().unwrap();
+            let d0_y = 0.0 + (i as f32) + rnd.pop().unwrap();
             let d0 = Detection::new(
                 arr1::<f32>(&[d0_x, d0_y, 10.0, 10.0]),
                 1.0,
@@ -267,25 +289,25 @@ mod tests {
             );
 
             // move down to left
-            let d1_x = 100.0 - (i as f32 * 1.0) + next_f32(&mut rng);
-            let d1_y = 100.0 - (i as f32 * 1.0) + next_f32(&mut rng);
+            let d1_x = 100.0 - (i as f32) + rnd.pop().unwrap();
+            let d1_y = 100.0 - (i as f32) + rnd.pop().unwrap();
             let d1 = Detection::new(
                 arr1::<f32>(&[d1_x, d1_y, 8.0, 8.0]),
                 1.0,
                 Array1::<f32>::from_elem(128, -0.5),
             );
 
-            // move down to right
-            let d2_x = 0.0 + (i as f32 * 1.0) + next_f32(&mut rng);
-            let d2_y = 100.0 - (i as f32 * 1.0) + next_f32(&mut rng);
+            // move down to left
+            let d2_x = 0.0 + (i as f32) + rnd.pop().unwrap();
+            let d2_y = 100.0 - (i as f32) + rnd.pop().unwrap();
             let d2 = Detection::new(
                 arr1::<f32>(&[d2_x, d2_y, 6.0, 6.0]),
                 1.0,
-                Array1::<f32>::from_elem(128, -0.8),
+                Array1::<f32>::from_elem(128, 0.1),
             );
 
             &tracker.predict();
-            if i > 50 {
+            if i >= 5 {
                 &tracker.update(&[d0, d1, d2]);
             } else {
                 &tracker.update(&[d0, d1]);
@@ -304,6 +326,7 @@ mod tests {
                         .nrows(),
                 );
             }
+            println!("")
         }
     }
 }

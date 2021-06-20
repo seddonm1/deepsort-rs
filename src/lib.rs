@@ -10,7 +10,7 @@ mod track;
 mod tracker;
 
 pub use detection::Detection;
-pub use kalman_filter::{KalmanFilter, CHI2INV95};
+pub use kalman_filter::KalmanFilter;
 pub use linear_assignment::Match;
 pub use nn_matching::{Metric, NearestNeighborDistanceMetric};
 pub use track::Track;

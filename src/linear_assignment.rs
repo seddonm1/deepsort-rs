@@ -7,6 +7,8 @@ use ndarray::*;
 use pathfinding::kuhn_munkres::kuhn_munkres_min;
 use pathfinding::matrix::Matrix;
 
+pub static INFTY_COST: f32 = 1e5;
+
 #[derive(Debug, Clone)]
 pub struct Match {
     track_idx: usize,
@@ -92,12 +94,21 @@ pub fn min_cost_matching(
     if detection_indices.is_empty() || track_indices.is_empty() {
         (vec![], track_indices, detection_indices)
     } else {
-        let cost_matrix = (distance_metric)(
+        let mut cost_matrix: Array2<f32> = (distance_metric)(
             tracks,
             detections,
             Some(track_indices.clone()),
             Some(detection_indices.clone()),
         );
+        cost_matrix.mapv_inplace(|v| {
+            if v > max_distance {
+                max_distance + 1e-5
+            } else {
+                v
+            }
+        });
+
+        println!("cost_matrix {:?}", cost_matrix);
 
         // scipy.optimize.linear_sum_assignment silently drops rows if num columns is less:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
@@ -106,7 +117,7 @@ pub fn min_cost_matching(
 
         // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (Ord)
         let cost_vec = cost_matrix
-            .mapv(|v| (v.min(max_distance + 1e-5) * 1_000_000_000.0) as i64)
+            .mapv(|v| (v * 1_000_000_000.0) as i64)
             .iter()
             .cloned()
             .collect::<Vec<i64>>();
@@ -114,6 +125,9 @@ pub fn min_cost_matching(
         let matrix = Matrix::from_vec(cost_matrix.nrows(), cost_matrix.ncols(), cost_vec).unwrap();
         let (_, col_indices) = kuhn_munkres_min(&matrix);
         let row_indices = (0..col_indices.len()).collect::<Vec<usize>>();
+
+        println!("rows {:?}", row_indices);
+        println!("cols {:?}", col_indices);
 
         let mut matches: Vec<Match> = vec![];
         let mut unmatched_tracks: Vec<usize> = vec![];
@@ -294,7 +308,7 @@ pub fn gate_cost_matrix(
     gated_cost: Option<f32>,
     only_position: Option<bool>,
 ) -> Array2<f32> {
-    let gated_cost = gated_cost.unwrap_or(f32::MAX);
+    let gated_cost = gated_cost.unwrap_or(INFTY_COST);
     let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
     let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
 
@@ -445,6 +459,9 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(cost_matrix, arr2::<f32, _>(&[[f32::MAX, 0.53]]));
+        assert_eq!(
+            cost_matrix,
+            arr2::<f32, _>(&[[linear_assignment::INFTY_COST, 0.53]])
+        );
     }
 }

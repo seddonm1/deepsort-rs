@@ -83,7 +83,10 @@ pub fn iou_cost(
 
         if *track.time_since_update() > 1 {
             cost_matrix
-                .push_row(Array1::from_elem(detection_indices.len(), f32::MAX).view())
+                .push_row(
+                    Array1::from_elem(detection_indices.len(), linear_assignment::INFTY_COST)
+                        .view(),
+                )
                 .unwrap();
         } else {
             let bbox = track.to_tlwh();

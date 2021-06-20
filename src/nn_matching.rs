@@ -29,6 +29,7 @@ fn cosine_distance(x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
 
     let distances = 1.0 - x_norm.dot(&y_norm.t());
 
+    println!("cosine_distances: {:?} {:?} {:?}", x_norm, y_norm, distances);
     distances.fold_axis(Axis(0), f32::MAX, |&accumulator, &value| {
         accumulator.min(value)
     })
@@ -99,13 +100,13 @@ impl NearestNeighborDistanceMetric {
         matching_threshold: f32,
         budget: Option<i32>,
     ) -> NearestNeighborDistanceMetric {
-        let metric_impl = match metric {
+        let metric = match metric {
             Metric::Cosine => cosine_distance,
             Metric::Euclidean => euclidean_distance,
         };
 
         NearestNeighborDistanceMetric {
-            metric: metric_impl,
+            metric,
             matching_threshold,
             budget,
             samples: HashMap::new(),
@@ -185,6 +186,7 @@ impl NearestNeighborDistanceMetric {
     pub fn distance(&self, features: &Array2<f32>, targets: &[usize]) -> Array2<f32> {
         let mut cost_matrix = Array2::<f32>::zeros((0, features.nrows()));
         targets.iter().for_each(|target| {
+            println!("distance {:?}", (self.metric)(self.samples.get(target).unwrap().clone(), features.clone()));
             cost_matrix
                 .push_row(
                     (self.metric)(self.samples.get(target).unwrap().clone(), features.clone())
@@ -192,7 +194,6 @@ impl NearestNeighborDistanceMetric {
                 )
                 .unwrap();
         });
-
         cost_matrix
     }
 }
