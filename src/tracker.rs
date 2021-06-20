@@ -61,13 +61,6 @@ impl Tracker {
     }
 
     /**
-    Return the metric of the tracker
-    */
-    pub fn metric(&self) -> &NearestNeighborDistanceMetric {
-        &self.metric
-    }
-
-    /**
     Propagate track state distributions one time step forward.
     This function should be called once every time step, before `update`.
     */
