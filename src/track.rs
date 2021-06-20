@@ -28,7 +28,7 @@ pub struct Track {
     hits: usize,
     age: usize,
     time_since_update: usize,
-    pub features: Array2<f32>,
+    features: Array2<f32>,
 }
 
 /**
@@ -120,6 +120,13 @@ impl Track {
     }
 
     /**
+    Return the mutable time since update of the track
+    */
+    pub fn time_since_update_mut(&mut self) -> &mut usize {
+        &mut self.time_since_update
+    }
+
+    /**
     Return the mean of the track
     */
     pub fn mean(&self) -> &Array1<f32> {
@@ -131,6 +138,20 @@ impl Track {
     */
     pub fn covariance(&self) -> &Array2<f32> {
         &self.covariance
+    }
+
+    /**
+    Return the features of the track
+    */
+    pub fn features(&self) -> &Array2<f32> {
+        &self.features
+    }
+
+    /**
+    Return the mutable features of the track
+    */
+    pub fn features_mut(&mut self) -> &mut Array2<f32> {
+        &mut self.features
     }
 
     pub fn to_tlwh(&self) -> Array1<f32> {

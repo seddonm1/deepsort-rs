@@ -33,7 +33,7 @@ tracks : List[Track]
 */
 #[derive(Debug)]
 pub struct Tracker {
-    pub metric: NearestNeighborDistanceMetric,
+    metric: NearestNeighborDistanceMetric,
     max_iou_distance: f32,
     max_age: usize,
     n_init: usize,
@@ -58,6 +58,13 @@ impl Tracker {
             tracks: vec![],
             next_id: 1,
         }
+    }
+
+    /**
+    Return the metric of the tracker
+    */
+    pub fn metric(&self) -> &NearestNeighborDistanceMetric {
+        &self.metric
     }
 
     /**
@@ -109,11 +116,11 @@ impl Tracker {
             .iter_mut()
             .filter(|track| track.is_confirmed())
             .for_each(|track| {
-                features = concatenate![Axis(0), features, track.features];
-                for _ in 0..track.features.nrows() {
+                features = concatenate![Axis(0), features, *track.features()];
+                for _ in 0..track.features().nrows() {
                     targets.push(*track.track_id());
                 }
-                track.features = Array2::zeros((0, 128));
+                *track.features_mut() = Array2::zeros((0, 128));
             });
 
         self.metric

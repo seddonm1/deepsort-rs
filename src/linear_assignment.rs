@@ -375,7 +375,7 @@ mod tests {
 
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
         let mut t0 = Track::new(mean, covariance, 0, 0, 30, None);
-        t0.time_since_update = 1;
+        *t0.time_since_update_mut() = 1;
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
         let t1 = Track::new(mean, covariance, 1, 0, 30, None);
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.5, 3.5, 4.5, 5.5]));
