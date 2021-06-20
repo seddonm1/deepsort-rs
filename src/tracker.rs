@@ -238,20 +238,58 @@ impl Tracker {
 mod tests {
     use crate::*;
     use ndarray::*;
+    use rand::prelude::*;
+    use rand_pcg::{Lcg64Xsh32, Pcg32};
+
+    /**
+    Returns a psuedo-random (deterministic) f32 between -0.5 and +0.5
+    */
+    fn next_f32(rng: &mut Lcg64Xsh32) -> f32 {
+        (rng.next_u32() as f64 / u32::MAX as f64) as f32 - 0.5
+    }
 
     #[test]
     fn tracker() {
+        // deterministic generator
+        let mut rng = Pcg32::seed_from_u64(0);
+
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
-        for i in 0..50 {
-            let d = Detection::new(
-                arr1::<f32>(&[4.0 + (i as f32 * 0.5), 5.0 + (i as f32 * 0.5), 5.0, 6.0]),
+        for i in 0..1 {
+            // move up to right
+            let d0_x = 0.0 + (i as f32 * 1.0) + next_f32(&mut rng);
+            let d0_y = 0.0 + (i as f32 * 1.0) + next_f32(&mut rng);
+            let d0 = Detection::new(
+                arr1::<f32>(&[d0_x, d0_y, 10.0, 10.0]),
                 1.0,
-                Array::range(0.0 + (i as f32 * 0.1), 128.0 + (i as f32 * 0.1), 1.0),
+                Array1::<f32>::from_elem(128, 0.5),
             );
+
+            // move down to left
+            let d1_x = 100.0 - (i as f32 * 1.0) + next_f32(&mut rng);
+            let d1_y = 100.0 - (i as f32 * 1.0) + next_f32(&mut rng);
+            let d1 = Detection::new(
+                arr1::<f32>(&[d1_x, d1_y, 8.0, 8.0]),
+                1.0,
+                Array1::<f32>::from_elem(128, -0.5),
+            );
+
+            // move down to right
+            let d2_x = 0.0 + (i as f32 * 1.0) + next_f32(&mut rng);
+            let d2_y = 100.0 - (i as f32 * 1.0) + next_f32(&mut rng);
+            let d2 = Detection::new(
+                arr1::<f32>(&[d2_x, d2_y, 6.0, 6.0]),
+                1.0,
+                Array1::<f32>::from_elem(128, -0.8),
+            );
+
             &tracker.predict();
-            &tracker.update(&[d]);
+            if i > 50 {
+                &tracker.update(&[d0, d1, d2]);
+            } else {
+                &tracker.update(&[d0, d1]);
+            }
             for track in &tracker.tracks {
                 println!(
                     "{}: {:?} {:?} {:?} {:?}",
@@ -263,7 +301,7 @@ mod tests {
                         .metric
                         .features(*track.track_id())
                         .unwrap_or(&Array2::<f32>::zeros((0, 128)))
-                        .nrows()
+                        .nrows(),
                 );
             }
         }

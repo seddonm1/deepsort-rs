@@ -99,7 +99,12 @@ pub fn min_cost_matching(
             Some(detection_indices.clone()),
         );
 
-        // multiply by large constant to convert to i64 which satisfies Matrix requirements (Ord)
+        // scipy.optimize.linear_sum_assignment silently drops rows if num columns is less:
+        // 'If it has more rows than columns, then not every row needs to be assigned to a column'
+        let cost_matrix =
+            cost_matrix.slice(s![0..cost_matrix.nrows().min(cost_matrix.ncols()), ..]);
+
+        // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (Ord)
         let cost_vec = cost_matrix
             .mapv(|v| (v.min(max_distance + 1e-5) * 1_000_000_000.0) as i64)
             .iter()

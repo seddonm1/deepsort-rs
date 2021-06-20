@@ -144,7 +144,7 @@ impl NearestNeighborDistanceMetric {
         targets: &Array1<usize>,
         active_targets: &[usize],
     ) {
-        if features.ncols() != 0 {
+        if targets.len() != 0 {
             Zip::from(features.rows())
                 .and(targets)
                 .for_each(|feature, target| match self.samples.get_mut(target) {
