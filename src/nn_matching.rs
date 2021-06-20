@@ -24,10 +24,8 @@ ndarray
     smallest cosine distance to a sample in `x`.
 */
 fn cosine_distance(x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
-    let (mut x_norm, _) = norm::normalize(x, NormalizeAxis::Row);
-    x_norm.mapv_inplace(|v| f32::trunc(v * 100_000_000.0)/100_000_000.0);
-    let (mut y_norm, _) = norm::normalize(y, NormalizeAxis::Row);
-    y_norm.mapv_inplace(|v| f32::trunc(v * 100_000_000.0)/100_000_000.0);
+    let x_norm = x.clone() / x.norm_l2();
+    let y_norm = y.clone() / y.norm_l2();
 
     let distances = 1.0 - x_norm.dot(&y_norm.t());
 
@@ -263,6 +261,8 @@ mod tests {
     fn cosine_distance() {
         let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.5, None);
 
+        // todo fix tests
+        assert!(false);
         metric.partial_fit(
             &stack![
                 Axis(0),

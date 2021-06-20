@@ -113,6 +113,8 @@ pub fn min_cost_matching(
         let cost_matrix =
             cost_matrix.slice(s![0..cost_matrix.nrows().min(cost_matrix.ncols()), ..]);
 
+        println!("cost_matrix {:?}", cost_matrix);
+
         // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (Ord)
         let cost_vec = cost_matrix
             .mapv(|v| (v * 1_000_000_000.0) as i64)
@@ -303,11 +305,9 @@ pub fn gate_cost_matrix(
     gated_cost: Option<f32>,
     only_position: Option<bool>,
 ) -> Array2<f32> {
-
     let gated_cost = gated_cost.unwrap_or(INFTY_COST);
     let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
     let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
-
 
     let mut measurements = Array2::zeros((0, 4));
     detection_indices.iter().for_each(|i| {
@@ -323,11 +323,14 @@ pub fn gate_cost_matrix(
             let track = tracks.get(*track_idx).unwrap();
             let gating_distance =
                 kf.gating_distance(&track.mean(), &track.covariance(), &measurements);
-            gating_distance.iter().enumerate().for_each(|(i, gating_distance)| {
-                if gating_distance > gating_threshold {
-                    cost_matrix[[row, i]] = gated_cost;
-                }
-            });
+            gating_distance
+                .iter()
+                .enumerate()
+                .for_each(|(i, gating_distance)| {
+                    if gating_distance > gating_threshold {
+                        cost_matrix[[row, i]] = gated_cost;
+                    }
+                });
         });
 
     cost_matrix
