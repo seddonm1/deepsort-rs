@@ -108,8 +108,6 @@ pub fn min_cost_matching(
             }
         });
 
-        println!("cost_matrix {:?}", cost_matrix);
-
         // scipy.optimize.linear_sum_assignment silently drops rows if num columns is less:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
         let cost_matrix =
@@ -125,9 +123,6 @@ pub fn min_cost_matching(
         let matrix = Matrix::from_vec(cost_matrix.nrows(), cost_matrix.ncols(), cost_vec).unwrap();
         let (_, col_indices) = kuhn_munkres_min(&matrix);
         let row_indices = (0..col_indices.len()).collect::<Vec<usize>>();
-
-        println!("rows {:?}", row_indices);
-        println!("cols {:?}", col_indices);
 
         let mut matches: Vec<Match> = vec![];
         let mut unmatched_tracks: Vec<usize> = vec![];
@@ -308,9 +303,11 @@ pub fn gate_cost_matrix(
     gated_cost: Option<f32>,
     only_position: Option<bool>,
 ) -> Array2<f32> {
+
     let gated_cost = gated_cost.unwrap_or(INFTY_COST);
     let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
     let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
+
 
     let mut measurements = Array2::zeros((0, 4));
     detection_indices.iter().for_each(|i| {
@@ -325,10 +322,12 @@ pub fn gate_cost_matrix(
         .for_each(|(row, track_idx)| {
             let track = tracks.get(*track_idx).unwrap();
             let gating_distance =
-                kf.gating_distance(&track.mean(), &track.covariance(), &measurements)[0];
-            if gating_distance > *gating_threshold {
-                cost_matrix[[row, 0]] = gated_cost;
-            }
+                kf.gating_distance(&track.mean(), &track.covariance(), &measurements);
+            gating_distance.iter().enumerate().for_each(|(i, gating_distance)| {
+                if gating_distance > gating_threshold {
+                    cost_matrix[[row, i]] = gated_cost;
+                }
+            });
         });
 
     cost_matrix

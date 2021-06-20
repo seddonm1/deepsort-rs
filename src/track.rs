@@ -225,7 +225,7 @@ impl Track {
     Returns True if this track is tentative (unconfirmed).
     */
     #[allow(dead_code)]
-    fn is_tentative(&self) -> bool {
+    pub fn is_tentative(&self) -> bool {
         matches!(self.state, TrackState::Tentative)
     }
 
@@ -239,8 +239,7 @@ impl Track {
     /**
     Returns True if this track is dead and should be deleted.
     */
-    #[allow(dead_code)]
-    fn is_deleted(&self) -> bool {
+    pub fn is_deleted(&self) -> bool {
         matches!(self.state, TrackState::Deleted)
     }
 }

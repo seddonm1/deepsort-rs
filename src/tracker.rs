@@ -81,11 +81,6 @@ impl Tracker {
         // Run matching cascade.
         let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(detections);
 
-        println!(
-            "update: {:?} {:?} {:?}",
-            matches, unmatched_tracks, unmatched_detections
-        );
-
         // Update track set.
         for m in matches {
             self.tracks
@@ -99,6 +94,7 @@ impl Tracker {
         for detection_idx in unmatched_detections {
             self.initiate_track(detections.get(detection_idx).unwrap().to_owned());
         }
+        self.tracks.retain(|track| !track.is_deleted());
 
         // Update distance metric.
         let active_targets: Vec<usize> = self
@@ -191,10 +187,6 @@ impl Tracker {
                 Some(confirmed_tracks),
                 None,
             );
-        println!(
-            "a: {:?} {:?} {:?}",
-            matches_a, unmatched_tracks_a, unmatched_detections
-        );
 
         // Associate remaining tracks together with unconfirmed tracks using IOU.
         let iou_track_candidates = [
@@ -223,11 +215,6 @@ impl Tracker {
                 Some(unmatched_detections),
             );
 
-        println!(
-            "b: {:?} {:?} {:?}",
-            matches_b, unmatched_tracks_b, unmatched_detections
-        );
-
         let matches = [matches_a, matches_b].concat();
         let mut unmatched_tracks = [unmatched_tracks_a, unmatched_tracks_b].concat();
         unmatched_tracks.dedup();
@@ -253,6 +240,7 @@ impl Tracker {
 mod tests {
     use crate::*;
     use ndarray::*;
+
     use rand::prelude::*;
     use rand_pcg::{Lcg64Xsh32, Pcg32};
 
@@ -276,7 +264,7 @@ mod tests {
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
-        for i in 0..6 {
+        for i in 0..101 {
             println!("{} ---------------------------", i);
 
             // move up to right
@@ -307,7 +295,7 @@ mod tests {
             );
 
             &tracker.predict();
-            if i >= 5 {
+            if i >= 10 && i <= 40 {
                 &tracker.update(&[d0, d1, d2]);
             } else {
                 &tracker.update(&[d0, d1]);

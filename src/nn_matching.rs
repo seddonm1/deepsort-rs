@@ -24,12 +24,13 @@ ndarray
     smallest cosine distance to a sample in `x`.
 */
 fn cosine_distance(x: Array2<f32>, y: Array2<f32>) -> Array1<f32> {
-    let (x_norm, _) = norm::normalize(x, NormalizeAxis::Row);
-    let (y_norm, _) = norm::normalize(y, NormalizeAxis::Row);
+    let (mut x_norm, _) = norm::normalize(x, NormalizeAxis::Row);
+    x_norm.mapv_inplace(|v| f32::trunc(v * 100_000_000.0)/100_000_000.0);
+    let (mut y_norm, _) = norm::normalize(y, NormalizeAxis::Row);
+    y_norm.mapv_inplace(|v| f32::trunc(v * 100_000_000.0)/100_000_000.0);
 
     let distances = 1.0 - x_norm.dot(&y_norm.t());
 
-    println!("cosine_distances: {:?} {:?} {:?}", x_norm, y_norm, distances);
     distances.fold_axis(Axis(0), f32::MAX, |&accumulator, &value| {
         accumulator.min(value)
     })
@@ -186,7 +187,6 @@ impl NearestNeighborDistanceMetric {
     pub fn distance(&self, features: &Array2<f32>, targets: &[usize]) -> Array2<f32> {
         let mut cost_matrix = Array2::<f32>::zeros((0, features.nrows()));
         targets.iter().for_each(|target| {
-            println!("distance {:?}", (self.metric)(self.samples.get(target).unwrap().clone(), features.clone()));
             cost_matrix
                 .push_row(
                     (self.metric)(self.samples.get(target).unwrap().clone(), features.clone())
