@@ -5,9 +5,8 @@ use ndarray_linalg::*;
 
 lazy_static! {
     /**
-    Table for the 0.95 quantile of the chi-square distribution with N degrees of
-    freedom (contains values for N=1, ..., 9). Taken from MATLAB/Octave's chi2inv
-    function and used as Mahalanobis gating threshold.
+    Table for the 0.95 quantile of the chi-square distribution with N degrees of freedom (contains values for N=1, ..., 9).
+    Taken from MATLAB/Octave's chi2inv function and used as Mahalanobis gating threshold.
     */
     pub static ref CHI2INV95: HashMap<usize, f32> = {
         let mut m = HashMap::new();
@@ -27,16 +26,12 @@ lazy_static! {
 /**
 A simple Kalman filter for tracking bounding boxes in image space.
 
-The 8-dimensional state space
+The 8-dimensional state space:
     x, y, a, h, vx, vy, va, vh
-contains the bounding box center position (x, y), aspect ratio a, height h,
-and their respective velocities.
+contains the bounding box center position (x, y), aspect ratio a, height h, and their respective velocities.
 
-Object motion follows a constant velocity model. The bounding box location
-(x, y, a, h) is taken as direct observation of the state space (linear
-observation model).
+Object motion follows a constant velocity model. The bounding box location (x, y, a, h) is taken as direct observation of the state space (linear observation model).
 */
-
 #[derive(Debug, Clone)]
 pub struct KalmanFilter {
     motion_mat: Array2<f32>,
@@ -52,6 +47,7 @@ impl Default for KalmanFilter {
 }
 
 impl KalmanFilter {
+    /// Returns a new KalmanFilter
     pub fn new() -> KalmanFilter {
         let ndim = 4;
 
@@ -81,22 +77,19 @@ impl KalmanFilter {
         }
     }
 
-    /**
-    Create track from unassociated measurement.
-
-    Parameters
-    ----------
-    measurement : ndarray
-        Bounding box coordinates (x, y, a, h) with center position (x, y),
-        aspect ratio a, and height h.
-
-    Returns
-    -------
-    (ndarray, ndarray)
-        Returns the mean vector (8 dimensional) and covariance matrix (8x8
-        dimensional) of the new track. Unobserved velocities are initialized
-        to 0 mean.
-    */
+    /// Create track from unassociated measurement.
+    ///
+    /// # Arguments
+    ///
+    /// - `measurement`: Bounding box coordinates (x, y, a, h) with center position (x, y), aspect ratio a, and height h.
+    ///
+    /// # Returns
+    ///
+    /// A tuple with the following two entries of the new track:
+    /// - The mean vector (8 dimensional).
+    /// - The covariance matrix (8x8 dimensional).
+    ///
+    /// Unobserved velocities are initialized to 0 mean.
     pub fn initiate(&self, measurement: &Array1<f32>) -> (Array1<f32>, Array2<f32>) {
         let mean_pos = measurement;
         let mean_vel = Array1::<f32>::zeros(mean_pos.raw_dim());
@@ -118,23 +111,20 @@ impl KalmanFilter {
         (mean, covariance)
     }
 
-    /**
-    Run Kalman filter prediction step.
-
-    Parameters
-    ----------
-    mean : ndarray
-        The 8 dimensional mean vector of the object state at the previous
-        time step.
-    covariance : ndarray
-        The 8x8 dimensional covariance matrix of the object state at the
-        previous time step.
-    Returns
-    -------
-    (ndarray, ndarray)
-        Returns the mean vector and covariance matrix of the predicted
-        state. Unobserved velocities are initialized to 0 mean.
-    */
+    /// Run Kalman filter prediction step.
+    ///
+    /// # Arguments
+    ///
+    /// - `mean`: The 8 dimensional mean vector of the object state at the previous time step.
+    /// - `covariance`: The 8x8 dimensional covariance matrix of the object state at the previous time step.
+    ///
+    /// # Returns
+    ///
+    /// A tuple with the following two entries of the predicted state:
+    /// - The mean vector (8 dimensional).
+    /// - The covariance matrix (8x8 dimensional).
+    ///
+    /// Unobserved velocities are initialized to 0 mean.
     pub fn predict(
         &self,
         mean: &Array1<f32>,
@@ -166,21 +156,18 @@ impl KalmanFilter {
         (mean, covariance)
     }
 
-    /**
-    Project state distribution to measurement space.
-
-    Parameters
-    ----------
-    mean : ndarray
-        The state's mean vector (8 dimensional array).
-    covariance : ndarray
-        The state's covariance matrix (8x8 dimensional).
-    Returns
-    -------
-    (ndarray, ndarray)
-        Returns the projected mean and covariance matrix of the given state
-        estimate.
-    */
+    /// Project state distribution to measurement space.
+    ///
+    /// # Arguments
+    ///
+    /// - `mean`: The state's mean vector (8 dimensional array).
+    /// - `covariance`: The state's covariance matrix (8x8 dimensional).
+    ///
+    /// # Returns
+    ///
+    /// A tuple with the following two entries of the given state estimate:
+    /// - The mean vector (8 dimensional).
+    /// - The covariance matrix (8x8 dimensional).
     pub fn project(
         &self,
         mean: &Array1<f32>,
@@ -201,23 +188,19 @@ impl KalmanFilter {
         (mean, covariance)
     }
 
-    /**
-    Run Kalman filter correction step.
-    Parameters
-    ----------
-    mean : ndarray
-        The predicted state's mean vector (8 dimensional).
-    covariance : ndarray
-        The state's covariance matrix (8x8 dimensional).
-    measurement : ndarray
-        The 4 dimensional measurement vector (x, y, a, h), where (x, y)
-        is the center position, a the aspect ratio, and h the height of the
-        bounding box.
-    Returns
-    -------
-    (ndarray, ndarray)
-        Returns the measurement-corrected state distribution.
-    */
+    /// Run Kalman filter correction step.
+    ///
+    /// # Arguments
+    ///
+    /// - `mean`: The state's mean vector (8 dimensional array).
+    /// - `covariance`: The state's covariance matrix (8x8 dimensional).
+    /// - `measurement`: The 4 dimensional measurement vector (x, y, a, h), where (x, y) is the center position, a the aspect ratio, and h the height of the bounding box.
+    ///
+    /// # Returns
+    ///
+    /// A tuple with the following two entries of the measurement-corrected state distribution:
+    /// - The mean vector (8 dimensional).
+    /// - The covariance matrix (8x8 dimensional).
     pub fn update(
         &self,
         mean: &Array1<f32>,
@@ -249,33 +232,17 @@ impl KalmanFilter {
         (new_mean, new_covariance)
     }
 
-    /**
-    Compute gating distance between state distribution and measurements.
-    A suitable distance threshold can be obtained from `chi2inv95`. If
-    `only_position` is False, the chi-square distribution has 4 degrees of
-    freedom, otherwise 2.
-
-    Parameters
-    ----------
-    mean : ndarray
-        Mean vector over the state distribution (8 dimensional).
-    covariance : ndarray
-        Covariance of the state distribution (8x8 dimensional).
-    measurements : ndarray
-        An Nx4 dimensional matrix of N measurements, each in
-        format (x, y, a, h) where (x, y) is the bounding box center
-        position, a the aspect ratio, and h the height.
-    only_position : Optional[bool]
-        If True, distance computation is done with respect to the bounding
-        box center position only.
-
-    Returns
-    -------
-    ndarray
-        Returns an array of length N, where the i-th element contains the
-        squared Mahalanobis distance between (mean, covariance) and
-        `measurements[i]`.
-    */
+    /// Compute gating distance between state distribution and measurements.
+    ///
+    /// # Parameters
+    ///
+    /// - `mean`: Mean vector over the state distribution (8 dimensional).
+    /// - `covariance`: Covariance of the state distribution (8x8 dimensional).
+    /// - `measurements`: An Nx4 dimensional matrix of N measurements, each in format (x, y, a, h) where (x, y) is the bounding box center position, a the aspect ratio, and h the height.
+    ///
+    /// # Returns
+    ///
+    /// An array of length N, where the i-th element contains the squared Mahalanobis distance between (mean, covariance) and `measurements[i]`.
     pub fn gating_distance(
         &self,
         mean: &Array1<f32>,

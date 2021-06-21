@@ -4,45 +4,68 @@ use crate::*;
 
 use ndarray::*;
 
-/**
-This is the multi-target tracker.
-
-Parameters
-----------
-metric : nn_matching.NearestNeighborDistanceMetric
-    A distance metric for measurement-to-track association.
-max_age : int
-    Maximum number of missed misses before a track is deleted.
-n_init : int
-    Number of consecutive detections before the track is confirmed. The
-    track state is set to `Deleted` if a miss occurs within the first
-    `n_init` frames.
-
-Attributes
-----------
-metric : nn_matching.NearestNeighborDistanceMetric
-    The distance metric used for measurement to track association.
-max_age : int
-    Maximum number of missed misses before a track is deleted.
-n_init : int
-    Number of frames that a track remains in initialization phase.
-kf : kalman_filter.KalmanFilter
-    A Kalman filter to filter target trajectories in image space.
-tracks : List[Track]
-    The list of active tracks at the current time step.
-*/
+/// This is the multi-target tracker.
+///
+///
+/// # Examples
+///
+/// ```
+/// use deepsort_rs::{Detection, Metric, NearestNeighborDistanceMetric, Tracker};
+/// use ndarray::*;
+///
+/// // instantiate tracker with default parameters
+/// let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None);
+/// let mut tracker = Tracker::new(metric, None, None, None);
+///
+/// // create a detection
+/// // feature would be the feature vector from the cosine metric learning model output
+/// let detection = Detection::new(
+///     arr1::<f32>(&[0.0, 0.0, 5.0, 5.0]),
+///     1.0,
+///     Array1::<f32>::from_elem(128, 0.0),
+/// );
+///
+/// // predict then add 0..n detections
+/// &tracker.predict();
+/// &tracker.update(&[detection]);
+///
+/// // print predictions
+/// for track in tracker.tracks() {
+///     println!(
+///         "{} {:?} {:?}",
+///         track.track_id(),
+///         track.state(),
+///         track.to_tlwh(),
+///     );
+/// };
+///```
 #[derive(Debug)]
 pub struct Tracker {
+    /// The distance metric used for measurement to track association.
     metric: NearestNeighborDistanceMetric,
+    /// Gating threshold for intersection over union. Associations with cost larger than this value are disregarded.
     max_iou_distance: f32,
+    /// Maximum number of missed misses before a track is deleted.
     max_age: usize,
+    /// Number of frames that a track remains in initialization phase.
     n_init: usize,
+    /// A Kalman filter to filter target trajectories in image space.
     kf: KalmanFilter,
+    /// The list of active tracks at the current time step.
     tracks: Vec<Track>,
+    /// Used to allocate identifiers to new tracks.
     next_id: usize,
 }
 
 impl Tracker {
+    /// Returns a new Tracker
+    ///
+    /// # Parameters
+    ///
+    /// - `metric`: A distance metric for measurement-to-track association.
+    /// - `max_iou_distance`: Gating threshold for intersection over union. Associations with cost larger than this value are disregarded. Default `0.7`.
+    /// - `max_age`: Maximum number of missed misses before a track is deleted. Default `30`.
+    /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames. Default `3`.
     pub fn new(
         metric: NearestNeighborDistanceMetric,
         max_iou_distance: Option<f32>,
@@ -60,23 +83,22 @@ impl Tracker {
         }
     }
 
-    /**
-    Propagate track state distributions one time step forward.
-    This function should be called once every time step, before `update`.
-    */
+    /// Return the tracks
+    pub fn tracks(&self) -> &Vec<Track> {
+        &self.tracks
+    }
+
+    /// Propagate track state distributions one time step forward. This function should be called once every time step, before `update`.
     pub fn predict(&mut self) {
         let kf = self.kf.clone();
         self.tracks.iter_mut().for_each(|track| track.predict(&kf));
     }
 
-    /**
-    Perform measurement update and track management.
-
-    Parameters
-    ----------
-    detections : List[deep_sort.detection.Detection]
-        A list of detections at the current time step.
-    */
+    /// Perform measurement update and track management.
+    ///
+    /// # Parameters
+    ///
+    /// - `detections`: A list of detections at the current time step.
     pub fn update(&mut self, detections: &[Detection]) {
         // Run matching cascade.
         let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(detections);
@@ -240,126 +262,158 @@ impl Tracker {
 mod tests {
     use crate::*;
     use ndarray::*;
-    use ndarray_linalg::*;
 
     use rand::prelude::*;
     use rand_distr::Normal;
     use rand_pcg::{Lcg64Xsh32, Pcg32};
 
-    /**
-    Returns a psuedo-random (deterministic) f32 between -0.5 and +0.5
-    */
+    /// Returns a psuedo-random (deterministic) f32 between -0.5 and +0.5
     fn next_f32(rng: &mut Lcg64Xsh32) -> f32 {
         (rng.next_u32() as f64 / u32::MAX as f64) as f32 - 0.5
     }
 
-    /**
-    Returns a 1 dimensional array of length n with a normal distribution
-    */
-    fn normal_array(rng: &mut Lcg64Xsh32, n: usize) -> Array1<f32> {
-        let normal = Normal::<f32>::new(0.0, 1.0).unwrap();
-        Array1::from_iter(0..n).map(|_| normal.sample(rng))
-    }
-
-    #[test]
-    fn dist() {
-        let d0_feat= arr1::<f32>(&[0.3137511, -0.3202066, 1.6520983, 0.95533675, 0.15276468, 0.45454866, 1.0438641, -0.7009732, -0.014999581, -0.62595874, -0.33203566, 1.7559817, -0.65735584, -0.43256283, 0.5441155, -0.10602719, 0.3174757, -0.36491573, 0.8495339, -0.6624082, -0.1404307, -0.7378972, 2.8740952, -1.219698, 2.045327, -0.6887551, -1.4272928, 1.0174482, 0.40614682, 0.45759702, 1.3944856, -0.274192, 0.5754163, 0.20928437, 0.34578562, -1.6986902, -0.13571458, 0.016368875, -1.7921753, 0.4731775, 0.045418244, 1.3136423, -0.87555593, -0.6281292, -0.87811804, 1.3237962, 0.9392997, -1.0136379, 0.3883478, -2.532321, -0.8555358, 0.07896551, 0.14306718, -0.73186994, 1.2471651, -2.157861, 1.980359, -0.19320361, 0.014842518, -1.3538964, 0.5458362, 1.9922605, 0.25495142, 1.1644526, -1.8461423, 0.46567327, 0.5659187, 0.1836285, 0.72999203, 0.23055272, 0.5986994, -0.24166021, -0.099153474, -0.25129476, 0.51398295, 0.08069479, 0.8892118, 0.8328143, -0.9962854, 2.1041355, 0.29763857, 0.6819845, -1.5318215, 0.0064774514, 1.7264658, -0.68408877, -0.07497442, -0.5548044, 1.2127275, -0.79692376, 1.1365596, -0.5583493, 0.8611271, 0.42189056, -1.4638159, 0.044071577, -1.390314, 0.23165126, -0.0138583, 0.07281749, 0.7628296, 0.055427752, -1.0913125, 0.46561095, -0.13710952, -1.1856806, -0.22490925, -0.47284982, -0.008171942, -0.83151996, -0.2757255, -0.5979965, -0.5726075, -1.9615966, -1.8618622, 0.60147095, 1.00462, 1.2953598, 0.67365015, -0.044211857, -0.06818482, -0.80238193, 1.0973345, 0.6850834, 2.195088, -0.81778735, 1.461295, 1.1445788]);
-
-        let x = stack![Axis(0), d0_feat.clone()];
-
-        let x_norm  = x.clone() / x.norm_l2();
-        // // x_norm.mapv_inplace(|v| f32::trunc(v * 100_000_000.0) / 100_000_000.0);
-        // let (mut y_norm, _) = norm::normalize(y, NormalizeAxis::Column);
-        // // y_norm.mapv_inplace(|v| f32::trunc(v * 100_000_000.0) / 100_000_000.0);
-        let distances = 1.0 - x_norm.dot(&x_norm.t());
-        println!("distances {:?} {:?}", x_norm, distances);
+    /// Returns a vec of length n with a normal distribution
+    fn normal_vec(rng: &mut Lcg64Xsh32, mean: f32, std_dev: f32, n: i32) -> Vec<f32> {
+        let normal = Normal::<f32>::new(mean, std_dev).unwrap();
+        (0..n).map(|_| normal.sample(rng)).collect()
     }
 
     #[test]
     fn tracker() {
+        let iterations: i32 = 100;
+        let log = false;
+
         // deterministic generator
         let mut rng = Pcg32::seed_from_u64(0);
 
-        let mut rnd = Vec::<f32>::with_capacity(500);
-        for _ in 0..1000 {
-            rnd.push(next_f32(&mut rng));
-        }
-        // println!("{:?}", random);
+        // create random movement/scale this is a vectors so it can be easily copied to python for comparison
+        let mut movement_jitter = (0..8 * iterations)
+            .map(|_| next_f32(&mut rng))
+            .collect::<Vec<f32>>();
+        let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 8 * iterations);
 
-        let d0_feat = normal_array(&mut rng, 128);
-        let d1_feat = normal_array(&mut rng, 128);
-        let d2_feat = normal_array(&mut rng, 128);
-        let d3_feat = normal_array(&mut rng, 128);
+        // create the feature vectors
+        let d0_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
+        let d1_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
+        let d2_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
+        let d3_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
 
-        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, 0.2, None);
+        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
-        for i in 0..32 {
-            println!("{} ---------------------------", i);
-
+        for iteration in 0..iterations {
             // move up to right
-            let d0_x = 0.0 + (i as f32) + rnd.pop().unwrap();
-            let d0_y = 0.0 + (i as f32) + rnd.pop().unwrap();
+            let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
+            let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0 = Detection::new(
-                arr1::<f32>(&[d0_x, d0_y, 10.0, 10.0]),
+                arr1::<f32>(&[
+                    d0_x,
+                    d0_y,
+                    10.0 + scale_jitter.pop().unwrap(),
+                    10.0 + scale_jitter.pop().unwrap(),
+                ]),
                 1.0,
                 d0_feat.clone(),
             );
 
             // move down to left
-            let d1_x = 100.0 - (i as f32) + rnd.pop().unwrap();
-            let d1_y = 100.0 - (i as f32) + rnd.pop().unwrap();
+            let d1_x = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
+            let d1_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1 = Detection::new(
-                arr1::<f32>(&[d1_x, d1_y, 8.0, 8.0]),
+                arr1::<f32>(&[
+                    d1_x,
+                    d1_y,
+                    8.0 + scale_jitter.pop().unwrap(),
+                    8.0 + scale_jitter.pop().unwrap(),
+                ]),
                 1.0,
                 d1_feat.clone(),
             );
 
             // move up to left
-            let d2_x = 0.0 + (i as f32) + rnd.pop().unwrap();
-            let d2_y = 100.0 - (i as f32) + rnd.pop().unwrap();
+            let d2_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
+            let d2_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d2 = Detection::new(
-                arr1::<f32>(&[d2_x, d2_y, 6.0, 6.0]),
+                arr1::<f32>(&[
+                    d2_x,
+                    d2_y,
+                    6.0 + scale_jitter.pop().unwrap(),
+                    6.0 + scale_jitter.pop().unwrap(),
+                ]),
                 1.0,
                 d2_feat.clone(),
             );
 
-            // move up
-            let d3_x = 0.0 + (i as f32 * 0.1) + rnd.pop().unwrap();
-            let d3_y = 0.0 + ((i - 50) as f32) + rnd.pop().unwrap();
+            // move up and right
+            let d3_x = 0.0 + (iteration as f32 * 0.1) + movement_jitter.pop().unwrap();
+            let d3_y = 0.0 + ((iteration - 50) as f32) + movement_jitter.pop().unwrap();
             let d3 = Detection::new(
-                arr1::<f32>(&[d3_x, d3_y, 5.0, 5.0]),
+                arr1::<f32>(&[
+                    d3_x,
+                    d3_y,
+                    5.0 + scale_jitter.pop().unwrap(),
+                    5.0 + scale_jitter.pop().unwrap(),
+                ]),
                 1.0,
                 d3_feat.clone(),
             );
 
             &tracker.predict();
-            match i {
-                _ if i >= 60 => {
+
+            // add and remove detections over the sequence
+            match iteration {
+                _ if iteration >= 60 => {
                     &tracker.update(&[d2, d3]);
                 }
-                _ if i >= 30 => {
+                _ if iteration >= 30 => {
                     &tracker.update(&[d0, d2]);
                 }
                 _ => {
                     &tracker.update(&[d0, d1]);
                 }
             }
-            for track in &tracker.tracks {
-                println!(
-                    "{}: {:?} {:?} {:?} {:?}",
-                    i,
-                    track.track_id(),
-                    track.state(),
-                    track.to_tlwh(),
-                    tracker
-                        .metric
-                        .features(*track.track_id())
-                        .unwrap_or(&Array2::<f32>::zeros((0, 128)))
-                        .nrows(),
-                );
+
+            // for debugging
+            if log {
+                for track in &tracker.tracks {
+                    println!(
+                        "{}: {:?} {:?} {:?} {:?}",
+                        iteration,
+                        track.track_id(),
+                        track.state(),
+                        track.to_tlwh(),
+                        tracker
+                            .metric
+                            .track_features(*track.track_id())
+                            .unwrap_or(&Array2::<f32>::zeros((0, 128)))
+                            .nrows(),
+                    );
+                }
             }
-            println!("")
         }
+
+        let track = tracker
+            .tracks
+            .iter()
+            .filter(|track| track.track_id() == &3)
+            .collect::<Vec<&Track>>();
+        let track = track.first().unwrap();
+        assert!(track.is_confirmed());
+        assert_eq!(
+            track.to_tlwh(),
+            arr1::<f32>(&[98.73315, 0.65894794, 5.728961, 5.717063])
+        );
+
+        let track = tracker
+            .tracks
+            .iter()
+            .filter(|track| track.track_id() == &4)
+            .collect::<Vec<&Track>>();
+        let track = track.first().unwrap();
+        assert!(track.is_confirmed());
+        assert_eq!(
+            track.to_tlwh(),
+            arr1::<f32>(&[10.129211, 48.62851, 5.1298714, 5.143466])
+        );
     }
 }

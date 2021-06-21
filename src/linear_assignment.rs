@@ -7,8 +7,6 @@ use ndarray::*;
 use pathfinding::kuhn_munkres::kuhn_munkres_min;
 use pathfinding::matrix::Matrix;
 
-pub static INFTY_COST: f32 = 1e5;
-
 #[derive(Debug, Clone)]
 pub struct Match {
     track_idx: usize,
@@ -16,6 +14,7 @@ pub struct Match {
 }
 
 impl Match {
+    /// Return a new Match
     pub fn new(track_idx: usize, detection_idx: usize) -> Match {
         Match {
             track_idx,
@@ -23,16 +22,12 @@ impl Match {
         }
     }
 
-    /**
-    Return the track identifier of the match
-    */
+    /// Return the track identifier of the match
     pub fn track_idx(&self) -> usize {
         self.track_idx
     }
 
-    /**
-    Return the detection identifier of the match
-    */
+    /// Return the detection identifier of the match
     pub fn detection_idx(&self) -> usize {
         self.detection_idx
     }
@@ -44,39 +39,24 @@ impl PartialEq for Match {
     }
 }
 
-/**
-Solve linear assignment problem.
-
-Parameters
-----------
-distance_metric : Callable[List[Track], List[Detection], List[int], List[int]) -> ndarray
-    The distance metric is given a list of tracks and detections as well as
-    a list of N track indices and M detection indices. The metric should
-    return the NxM dimensional cost matrix, where element (i, j) is the
-    association cost between the i-th track in the given track indices and
-    the j-th detection in the given detection_indices.
-max_distance : float
-    Gating threshold. Associations with cost larger than this value are
-    disregarded.
-tracks : List[track.Track]
-    A list of predicted tracks at the current time step.
-detections : List[detection.Detection]
-    A list of detections at the current time step.
-track_indices : List[int]
-    List of track indices that maps rows in `cost_matrix` to tracks in
-    `tracks` (see description above).
-detection_indices : List[int]
-    List of detection indices that maps columns in `cost_matrix` to
-    detections in `detections` (see description above).
-
-Returns
--------
-(List[(int, int)], List[int], List[int])
-    Returns a tuple with the following three entries:
-    * A list of matched track and detection indices.
-    * A list of unmatched track indices.
-    * A list of unmatched detection indices.
-*/
+/// Solve linear assignment problem.
+///
+/// # Parameters
+///
+/// - `distance_metric` : The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices. The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection_indices.
+/// - `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
+/// - `tracks`: A list of predicted tracks at the current time step.
+/// - `detections`: A list of detections at the current time step.
+/// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above).
+/// - `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above).
+///
+/// # Returns
+///
+/// A tuple with the following three entries:
+///
+/// - A list of matched track and detection indices.
+/// - A list of unmatched track indices.
+/// - A list of unmatched detection indices.
 #[allow(clippy::type_complexity)]
 pub fn min_cost_matching(
     distance_metric: Rc<
@@ -100,28 +80,24 @@ pub fn min_cost_matching(
             Some(track_indices.clone()),
             Some(detection_indices.clone()),
         );
-        cost_matrix.mapv_inplace(|v| {
-            if v > max_distance {
-                max_distance + 1e-5
-            } else {
-                v
-            }
-        });
+        cost_matrix.mapv_inplace(|v| v.min(max_distance + 1e-5));
 
-        // scipy.optimize.linear_sum_assignment silently drops rows if num columns is less:
+        // scipy.optimize.linear_sum_assignment truncates rows to num columns:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
         let cost_matrix =
             cost_matrix.slice(s![0..cost_matrix.nrows().min(cost_matrix.ncols()), ..]);
 
-        println!("cost_matrix {:?}", cost_matrix);
-
-        // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (Ord)
+        // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (f32 does not implement `std::cmp::Ord`)
         let cost_vec = cost_matrix
-            .mapv(|v| (v * 1_000_000_000.0) as i64)
+            .mapv(|v| (v * 10_000_000_000.0) as i64)
             .iter()
             .cloned()
             .collect::<Vec<i64>>();
 
+        // invoke the kuhn munkres min (aka hungarian) assignment algorithm
+        // this is equivalent to `scipy.optimize.linear_sum_assignment(maximise=False)` but where scipy returns two arrays
+        // (row_ind and col_ind) `kuhn_munkres_min` returns just the col_ind array leaving row_ind (which is just a row index) to be
+        // derived manually.
         let matrix = Matrix::from_vec(cost_matrix.nrows(), cost_matrix.ncols(), cost_vec).unwrap();
         let (_, col_indices) = kuhn_munkres_min(&matrix);
         let row_indices = (0..col_indices.len()).collect::<Vec<usize>>();
@@ -165,42 +141,24 @@ pub fn min_cost_matching(
     }
 }
 
-/**
-Run matching cascade.
-
-Parameters
-----------
-distance_metric : Callable[List[Track], List[Detection], List[int], List[int]) -> ndarray
-    The distance metric is given a list of tracks and detections as well as
-    a list of N track indices and M detection indices. The metric should
-    return the NxM dimensional cost matrix, where element (i, j) is the
-    association cost between the i-th track in the given track indices and
-    the j-th detection in the given detection indices.
-max_distance : float
-    Gating threshold. Associations with cost larger than this value are
-    disregarded.
-cascade_depth: int
-    The cascade depth, should be se to the maximum track age.
-tracks : List[track.Track]
-    A list of predicted tracks at the current time step.
-detections : List[detection.Detection]
-    A list of detections at the current time step.
-track_indices : Optional[List[int]]
-    List of track indices that maps rows in `cost_matrix` to tracks in
-    `tracks` (see description above). Defaults to all tracks.
-detection_indices : Optional[List[int]]
-    List of detection indices that maps columns in `cost_matrix` to
-    detections in `detections` (see description above). Defaults to all
-    detections.
-
-Returns
--------
-(List[(int, int)], List[int], List[int])
-    Returns a tuple with the following three entries:
-    * A list of matched track and detection indices.
-    * A list of unmatched track indices.
-    * A list of unmatched detection indices.
-*/
+/// Run matching cascade.
+///
+/// # Parameters
+///
+/// - `distance_metric`: The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices. The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection indices.
+/// - `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
+/// - `cascade_depth`: The cascade depth, should be se to the maximum track age.
+/// - `tracks`: A list of predicted tracks at the current time step.
+/// - `detections`: A list of detections at the current time step.
+/// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above). Defaults to all tracks.
+/// - `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above). Defaults to all detections.
+///
+/// # Returns
+///
+/// A tuple with the following three entries:
+/// - A list of matched track and detection indices.
+/// - A list of unmatched track indices.
+/// - A list of unmatched detection indices.
 #[allow(clippy::type_complexity)]
 pub fn matching_cascade(
     distance_metric: Rc<
@@ -214,9 +172,9 @@ pub fn matching_cascade(
     detection_indices: Option<Vec<usize>>,
 ) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
     let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
-    let detection_indices = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
 
-    let mut unmatched_detections = detection_indices.clone();
+    let mut unmatched_detections =
+        detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
     let mut matches: Vec<Match> = vec![];
 
     for level in 0..cascade_depth {
@@ -241,7 +199,7 @@ pub fn matching_cascade(
             tracks,
             detections,
             Some(track_indices_l),
-            Some(detection_indices.to_owned()),
+            Some(unmatched_detections.to_owned()),
         );
         matches.extend_from_slice(&matches_l);
         unmatched_detections = unmatched_detections_l;
@@ -260,40 +218,22 @@ pub fn matching_cascade(
     (matches, unmatched_tracks, unmatched_detections)
 }
 
-/**
-Invalidate infeasible entries in cost matrix based on the state
-distributions obtained by Kalman filtering.
-
-Parameters
-----------
-kf : The Kalman filter.
-cost_matrix : ndarray
-    The NxM dimensional cost matrix, where N is the number of track indices
-    and M is the number of detection indices, such that entry (i, j) is the
-    association cost between `tracks[track_indices[i]]` and
-    `detections[detection_indices[j]]`.
-tracks : List[track.Track]
-    A list of predicted tracks at the current time step.
-detections : List[detection.Detection]
-    A list of detections at the current time step.
-track_indices : List[int]
-    List of track indices that maps rows in `cost_matrix` to tracks in
-    `tracks` (see description above).
-detection_indices : List[int]
-    List of detection indices that maps columns in `cost_matrix` to
-    detections in `detections` (see description above).
-gated_cost : Optional[float]
-    Entries in the cost matrix corresponding to infeasible associations are
-    set this value. Defaults to a very large value.
-only_position : Optional[bool]
-    If True, only the x, y position of the state distribution is considered
-    during gating. Defaults to False.
-
-Returns
--------
-ndarray
-    Returns the modified cost matrix.
-*/
+/// Invalidate infeasible entries in cost matrix based on the state distributions obtained by Kalman filtering.
+///
+/// # Parameters
+///
+/// - `kf`: The Kalman filter.
+/// - `cost_matrix`: The NxM dimensional cost matrix, where N is the number of track indices and M is the number of detection indices, such that entry (i, j) is the association cost between `tracks[track_indices[i]]` and `detections[detection_indices[j]]`.
+/// - `tracks`: A list of predicted tracks at the current time step.
+/// - `detections`: A list of detections at the current time step.
+/// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above).
+/// - `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above).
+/// - `gated_cost`: Entries in the cost matrix corresponding to infeasible associations are set this value. Defaults to a very large value.
+/// - `only_position`: If true, only the x, y position of the state distribution is considered during gating. Defaults to false.
+///
+/// # Returns
+///
+/// The modified cost matrix.
 #[allow(clippy::too_many_arguments)]
 pub fn gate_cost_matrix(
     kf: KalmanFilter,
@@ -305,7 +245,7 @@ pub fn gate_cost_matrix(
     gated_cost: Option<f32>,
     only_position: Option<bool>,
 ) -> Array2<f32> {
-    let gated_cost = gated_cost.unwrap_or(INFTY_COST);
+    let gated_cost = gated_cost.unwrap_or(f32::MAX);
     let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
     let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
 
@@ -461,9 +401,6 @@ mod tests {
             None,
             None,
         );
-        assert_eq!(
-            cost_matrix,
-            arr2::<f32, _>(&[[linear_assignment::INFTY_COST, 0.53]])
-        );
+        assert_eq!(cost_matrix, arr2::<f32, _>(&[[f32::MAX, 0.53]]));
     }
 }

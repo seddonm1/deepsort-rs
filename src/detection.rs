@@ -1,34 +1,18 @@
 use ndarray::*;
 
-/**
-This class represents a bounding box detection in a single image.
-
-Parameters
-----------
-tlwh : array_like
-    Bounding box in format `(x, y, w, h)`.
-confidence : float
-    Detector confidence score.
-feature : array_like
-    A feature vector that describes the object contained in this image.
-
-Attributes
-----------
-tlwh : ndarray
-    Bounding box in format `(top left x, top left y, width, height)`.
-confidence : ndarray
-    Detector confidence score.
-feature : ndarray | NoneType
-    A feature vector that describes the object contained in this image.
-*/
+/// Detection represents a bounding box detection in a single image.
 #[derive(Debug, Clone)]
 pub struct Detection {
+    /// Bounding box in top, left, width, height format
     tlwh: Array1<f32>,
+    /// Detection confidence score
     confidence: f32,
+    /// A feature vector that describes the object contained in this image.
     feature: Array1<f32>,
 }
 
 impl Detection {
+    /// Returns a new Detection
     pub fn new(tlwh: Array1<f32>, confidence: f32, feature: Array1<f32>) -> Detection {
         Detection {
             tlwh,
@@ -37,23 +21,17 @@ impl Detection {
         }
     }
 
-    /**
-    Return the top, left, width, heigh of the detection
-    */
+    /// Returns the detection bounding box in top, left, width, height format
     pub fn tlwh(&self) -> &Array1<f32> {
         &self.tlwh
     }
 
-    /**
-    Return the feature array of the detection
-    */
+    /// Returns the feature array of the detection
     pub fn feature(&self) -> &Array1<f32> {
         &self.feature
     }
 
-    /**
-    Convert bounding box to format `(min x, min y, max x, max y)`, i.e., `(top left, bottom right)`.
-    */
+    /// Returns the detection bounding box in top, left, bottom, right format, i.e., `(min x, min y, max x, max y)`.
     pub fn to_tlbr(&self) -> Array1<f32> {
         array![
             self.tlwh[0],
@@ -63,9 +41,7 @@ impl Detection {
         ]
     }
 
-    /**
-    Convert bounding box to format `(center x, center y, aspect ratio, height)`, where the aspect ratio is `width / height`.
-    */
+    /// Returns the detection bounding box in center x, center y, aspect ratio, height format, where the aspect ratio is `width / height`.
     pub fn to_xyah(&self) -> Array1<f32> {
         array![
             self.tlwh[0] + (self.tlwh[2] / 2.0),

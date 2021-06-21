@@ -4,11 +4,11 @@ use crate::Detection;
 use crate::KalmanFilter;
 
 /**
-Enumeration type for the single target track state. Newly created tracks are
-classified as `tentative` until enough evidence has been collected. Then,
-the track state is changed to `confirmed`. Tracks that are no longer alive
-are classified as `deleted` to mark them for removal from the set of active
-tracks.
+Enumeration type for the single target track state:
+
+- Newly created tracks are classified as `tentative` until enough evidence has been collected.
+- Then, the track state is changed to `confirmed`.
+- Tracks that are no longer alive are classified as `deleted` to mark them for removal from the set of active tracks.
 */
 #[derive(Debug)]
 pub enum TrackState {
@@ -17,64 +17,40 @@ pub enum TrackState {
     Deleted,
 }
 
+/// A single target track with state space `(x, y, a, h)` and associated velocities, where `(x, y)` is the center of the bounding box, `a` is the aspect ratio and `h` is the height.
+///
+/// # Parameters
+///
+/// - `mean`: Mean vector of the initial state distribution.
+/// - `covariance`: Covariance matrix of the initial state distribution.
+/// - `track_id`: A unique track identifier.
+/// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
+/// - `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
+/// - `feature`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
 #[derive(Debug)]
 pub struct Track {
+    /// The current track state.
     state: TrackState,
+    /// Mean vector of the initial state distribution.
     mean: Array1<f32>,
+    /// Covariance matrix of the initial state distribution.
     covariance: Array2<f32>,
+    /// A unique track identifier.
     track_id: usize,
+    /// Number of consecutive detections before the track is confirmed
     n_init: usize,
+    /// The maximum number of consecutive misses before the track state is set to `Deleted`.
     max_age: usize,
+    /// Total number of measurement updates.
     hits: usize,
+    /// Total number of frames since first occurance.
     age: usize,
+    /// Total number of frames since last measurement update.
     time_since_update: usize,
+    /// A cache of features. On each measurement update, the associated feature vector is added to this list.
     features: Array2<f32>,
 }
 
-/**
-A single target track with state space `(x, y, a, h)` and associated
-velocities, where `(x, y)` is the center of the bounding box, `a` is the
-aspect ratio and `h` is the height.
-
-Parameters
-----------
-mean : ndarray
-    Mean vector of the initial state distribution.
-covariance : ndarray
-    Covariance matrix of the initial state distribution.
-track_id : int
-    A unique track identifier.
-n_init : int
-    Number of consecutive detections before the track is confirmed. The
-    track state is set to `Deleted` if a miss occurs within the first
-    `n_init` frames.
-max_age : int
-    The maximum number of consecutive misses before the track state is
-    set to `Deleted`.
-feature : Optional[ndarray]
-    Feature vector of the detection this track originates from. If not None,
-    this feature is added to the `features` cache.
-
-Attributes
-----------
-mean : ndarray
-    Mean vector of the initial state distribution.
-covariance : ndarray
-    Covariance matrix of the initial state distribution.
-track_id : int
-    A unique track identifier.
-hits : int
-    Total number of measurement updates.
-age : int
-    Total number of frames since first occurance.
-time_since_update : int
-    Total number of frames since last measurement update.
-state : TrackState
-    The current track state.
-features : List[ndarray]
-    A cache of features. On each measurement update, the associated feature
-    vector is added to this list.
-*/
 impl Track {
     pub fn new(
         mean: Array1<f32>,
@@ -98,62 +74,47 @@ impl Track {
         }
     }
 
-    /**
-    Return the identifier of the track
-    */
+    /// Return the identifier of the track
     pub fn track_id(&self) -> &usize {
         &self.track_id
     }
 
-    /**
-    Return the TrackState of the track
-    */
+    /// Return the TrackState of the track
     pub fn state(&self) -> &TrackState {
         &self.state
     }
 
-    /**
-    Return the time since update of the track
-    */
+    /// Return the time since update of the track
     pub fn time_since_update(&self) -> &usize {
         &self.time_since_update
     }
 
-    /**
-    Return the mutable time since update of the track
-    */
+    /// Return the mutable time since update of the track
     pub fn time_since_update_mut(&mut self) -> &mut usize {
         &mut self.time_since_update
     }
 
-    /**
-    Return the mean of the track
-    */
+    /// Return the mean of the track
     pub fn mean(&self) -> &Array1<f32> {
         &self.mean
     }
 
-    /**
-    Return the covariance of the track
-    */
+    /// Return the covariance of the track
     pub fn covariance(&self) -> &Array2<f32> {
         &self.covariance
     }
 
-    /**
-    Return the features of the track
-    */
+    /// Return the features of the track
     pub fn features(&self) -> &Array2<f32> {
         &self.features
     }
 
-    /**
-    Return the mutable features of the track
-    */
+    /// Return the mutable features of the track
     pub fn features_mut(&mut self) -> &mut Array2<f32> {
         &mut self.features
     }
 
+    /// Returns the track position bounding box in top, left, width, height format
     pub fn to_tlwh(&self) -> Array1<f32> {
         let w = self.mean[2] * self.mean[3];
         let h = self.mean[3];
@@ -162,6 +123,7 @@ impl Track {
         arr1::<f32>(&[t, l, w, h])
     }
 
+    /// Returns the track position bounding box in top, left, bottom, right format, i.e., `(min x, min y, max x, max y)`.
     pub fn to_tlbr(&self) -> Array1<f32> {
         let mut tlbr = self.to_tlwh();
         tlbr[2] += tlbr[0];
@@ -169,15 +131,11 @@ impl Track {
         tlbr
     }
 
-    /**
-    Propagate the state distribution to the current time step using a
-    Kalman filter prediction step.
-
-    Parameters
-    ----------
-    kf : kalman_filter.KalmanFilter
-        The Kalman filter.
-    */
+    /// Propagate the state distribution to the current time step using a Kalman filter prediction step.
+    ///
+    /// # Parameters
+    ///
+    /// - `kf`: The Kalman filter.
     pub fn predict(&mut self, kf: &KalmanFilter) {
         let (mean, covariance) = kf.predict(&self.mean, &self.covariance);
         self.mean = mean;
@@ -186,17 +144,12 @@ impl Track {
         self.time_since_update += 1;
     }
 
-    /**
-    Perform Kalman filter measurement update step and update the feature
-    cache.
-
-    Parameters
-    ----------
-    kf : kalman_filter.KalmanFilter
-        The Kalman filter.
-    detection : Detection
-        The associated detection.
-    */
+    /// Perform Kalman filter measurement update step and update the feature cache.
+    ///
+    /// # Parameters
+    ///
+    /// - `kf`: The Kalman filter.
+    /// - `detection`: The associated detection.
     pub fn update(&mut self, kf: &KalmanFilter, detection: &Detection) {
         let (mean, covariance) = kf.update(&self.mean, &self.covariance, &detection.to_xyah());
         self.mean = mean;
@@ -212,33 +165,25 @@ impl Track {
         }
     }
 
-    /**
-    Mark this track as missed (no association at the current time step).
-     */
+    /// Mark this track as missed (no association at the current time step).
     pub fn mark_missed(&mut self) {
         if matches!(self.state, TrackState::Tentative) || self.time_since_update > self.max_age {
             self.state = TrackState::Deleted;
         }
     }
 
-    /**
-    Returns True if this track is tentative (unconfirmed).
-    */
+    /// Returns true if this track is tentative (unconfirmed).
     #[allow(dead_code)]
     pub fn is_tentative(&self) -> bool {
         matches!(self.state, TrackState::Tentative)
     }
 
-    /**
-    Returns True if this track is confirmed.
-    */
+    /// Returns true if this track is confirmed.
     pub fn is_confirmed(&self) -> bool {
         matches!(self.state, TrackState::Confirmed)
     }
 
-    /**
-    Returns True if this track is dead and should be deleted.
-    */
+    /// Returns true if this track is dead and should be deleted.
     pub fn is_deleted(&self) -> bool {
         matches!(self.state, TrackState::Deleted)
     }
