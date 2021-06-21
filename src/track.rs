@@ -18,15 +18,6 @@ pub enum TrackState {
 }
 
 /// A single target track with state space `(x, y, a, h)` and associated velocities, where `(x, y)` is the center of the bounding box, `a` is the aspect ratio and `h` is the height.
-///
-/// # Parameters
-///
-/// - `mean`: Mean vector of the initial state distribution.
-/// - `covariance`: Covariance matrix of the initial state distribution.
-/// - `track_id`: A unique track identifier.
-/// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
-/// - `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
-/// - `feature`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
 #[derive(Debug)]
 pub struct Track {
     /// The current track state.
@@ -52,6 +43,17 @@ pub struct Track {
 }
 
 impl Track {
+
+    /// Returns a new Track
+    ///
+    /// # Parameters
+    ///
+    /// - `mean`: Mean vector of the initial state distribution.
+    /// - `covariance`: Covariance matrix of the initial state distribution.
+    /// - `track_id`: A unique track identifier.
+    /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
+    /// - `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
+    /// - `feature`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
     pub fn new(
         mean: Array1<f32>,
         covariance: Array2<f32>,

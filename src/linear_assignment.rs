@@ -15,6 +15,11 @@ pub struct Match {
 
 impl Match {
     /// Return a new Match
+    ///
+    /// # Parameters
+    ///
+    /// - `track_idx`: The match track index.
+    /// - `detection_idx`: The match detection index.
     pub fn new(track_idx: usize, detection_idx: usize) -> Match {
         Match {
             track_idx,

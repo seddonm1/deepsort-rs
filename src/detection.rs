@@ -3,9 +3,9 @@ use ndarray::*;
 /// Detection represents a bounding box detection in a single image.
 #[derive(Debug, Clone)]
 pub struct Detection {
-    /// Bounding box in top, left, width, height format
+    /// Bounding box in top, left, width, height format.
     tlwh: Array1<f32>,
-    /// Detection confidence score
+    /// Detection confidence score.
     confidence: f32,
     /// A feature vector that describes the object contained in this image.
     feature: Array1<f32>,
@@ -13,6 +13,12 @@ pub struct Detection {
 
 impl Detection {
     /// Returns a new Detection
+    ///
+    /// # Parameters
+    ///
+    /// - `tlwh`: Bounding box in top, left, width, height format.
+    /// - `confidence`: Detection confidence score.
+    /// - `feature`: A feature vector that describes the object contained in this image.
     pub fn new(tlwh: Array1<f32>, confidence: f32, feature: Array1<f32>) -> Detection {
         Detection {
             tlwh,
