@@ -2,7 +2,7 @@ use crate::*;
 
 use ndarray::*;
 
-/// Computer intersection over union.
+/// Compute intersection over union.
 ///
 /// # Parameters
 ///

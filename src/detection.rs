@@ -20,6 +20,7 @@ impl Detection {
     /// - `confidence`: Detection confidence score.
     /// - `feature`: A feature vector that describes the object contained in this image.
     pub fn new(tlwh: Array1<f32>, confidence: f32, feature: Array1<f32>) -> Detection {
+        assert!(tlwh.len() == 4);
         Detection {
             tlwh,
             confidence,

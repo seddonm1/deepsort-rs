@@ -43,7 +43,6 @@ pub struct Track {
 }
 
 impl Track {
-
     /// Returns a new Track
     ///
     /// # Parameters

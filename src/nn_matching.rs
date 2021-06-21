@@ -41,10 +41,10 @@ fn cosine_distance(x: &Array2<f32>, y: &Array2<f32>) -> Array1<f32> {
 ///
 /// A vector of length M that contains for each entry in `y` the smallest Euclidean distance to a sample in `x`.
 fn euclidean_distance(x: &Array2<f32>, y: &Array2<f32>) -> Array1<f32> {
-    let x2 = x.mapv(|v| v.powi(2)).sum_axis(Axis(1));
-    let y2 = y.mapv(|v| v.powi(2)).sum_axis(Axis(1));
+    let x2 = x.mapv(|v| v.powi(2)).sum_axis(Axis(1)).insert_axis(Axis(0));
+    let y2 = y.mapv(|v| v.powi(2)).sum_axis(Axis(1)).insert_axis(Axis(0));
 
-    let res = -2.0 * x.dot(&y.t()) + stack![Axis(0), x2].t() + stack![Axis(0), y2];
+    let res = -2.0 * x.dot(&y.t()) + x2.t() + y2;
     let distances = res.mapv(|v| v.clamp(0.0, f32::MAX));
 
     distances
@@ -62,6 +62,8 @@ pub struct NearestNeighborDistanceMetric {
     matching_threshold: f32,
     /// If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
     budget: Option<i32>,
+    /// The length of the feature vectors.
+    feature_length: usize,
     /// A HashMap that maps from target identities to the list of samples that have been observed so far.
     samples: HashMap<usize, Array2<f32>>,
 }
@@ -83,10 +85,12 @@ impl NearestNeighborDistanceMetric {
     ///
     /// - `metric`: Either `Metric::Euclidean` or `Metric::Cosine`.
     /// - `matching_threshold`: The matching threshold. Samples with larger distance are considered an invalid match. Default `0.2`.
+    /// - `feature_length`: The feature vector length. Default `128`.
     /// - `budget`: If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
     pub fn new(
         metric: Metric,
         matching_threshold: Option<f32>,
+        feature_length: Option<usize>,
         budget: Option<i32>,
     ) -> NearestNeighborDistanceMetric {
         let metric = match metric {
@@ -97,14 +101,20 @@ impl NearestNeighborDistanceMetric {
         NearestNeighborDistanceMetric {
             metric,
             matching_threshold: matching_threshold.unwrap_or(0.2),
+            feature_length: feature_length.unwrap_or(128),
             budget,
             samples: HashMap::new(),
         }
     }
 
     /// Return the matching threshold
-    pub fn matching_threshold(&self) -> f32 {
-        self.matching_threshold
+    pub fn matching_threshold(&self) -> &f32 {
+        &self.matching_threshold
+    }
+
+    /// Return the feature length
+    pub fn feature_length(&self) -> &usize {
+        &self.feature_length
     }
 
     /// Return the stored feature vectors for a given track identifier
@@ -136,7 +146,7 @@ impl NearestNeighborDistanceMetric {
                         }
                     }
                     None => {
-                        let mut target_features = Array2::<f32>::zeros((0, 128));
+                        let mut target_features = Array2::<f32>::zeros((0, feature.len()));
                         target_features.push_row(feature).unwrap();
                         self.samples.insert(target.to_owned(), target_features);
                     }
@@ -185,7 +195,7 @@ mod tests {
 
     #[test]
     fn partial_fit() {
-        let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None);
+        let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
         metric.partial_fit(&array![[]], &array![], &vec![]);
 
         metric.partial_fit(
@@ -241,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn cosine_distance_equality() {
+    fn cosine_distance() {
         let mut rng = Pcg32::seed_from_u64(0);
         for _ in 0..1 {
             let x = &stack![Axis(0), normal_array(&mut rng, 128)];
@@ -252,7 +262,7 @@ mod tests {
 
     #[test]
     fn euclidean_distance() {
-        let mut metric = NearestNeighborDistanceMetric::new(Metric::Euclidean, None, None);
+        let mut metric = NearestNeighborDistanceMetric::new(Metric::Euclidean, None, None, None);
 
         metric.partial_fit(
             &stack![

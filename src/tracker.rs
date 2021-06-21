@@ -14,7 +14,7 @@ use ndarray::*;
 /// use ndarray::*;
 ///
 /// // instantiate tracker with default parameters
-/// let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None);
+/// let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
 /// let mut tracker = Tracker::new(metric, None, None, None);
 ///
 /// // create a detection
@@ -66,6 +66,7 @@ impl Tracker {
     /// - `max_iou_distance`: Gating threshold for intersection over union. Associations with cost larger than this value are disregarded. Default `0.7`.
     /// - `max_age`: Maximum number of missed misses before a track is deleted. Default `30`.
     /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames. Default `3`.
+    /// - `feature_length`: The length of the feature vector used for
     pub fn new(
         metric: NearestNeighborDistanceMetric,
         max_iou_distance: Option<f32>,
@@ -126,7 +127,8 @@ impl Tracker {
             .map(|track| *track.track_id())
             .collect();
 
-        let mut features = Array2::<f32>::zeros((0, 128));
+        let feature_length = *self.metric.feature_length();
+        let mut features = Array2::<f32>::zeros((0, feature_length));
         let mut targets: Vec<usize> = vec![];
         self.tracks
             .iter_mut()
@@ -136,7 +138,7 @@ impl Tracker {
                 for _ in 0..track.features().nrows() {
                     targets.push(*track.track_id());
                 }
-                *track.features_mut() = Array2::zeros((0, 128));
+                *track.features_mut() = Array2::zeros((0, feature_length));
             });
 
         self.metric
@@ -146,6 +148,7 @@ impl Tracker {
     fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
         let metric = self.metric.clone();
         let kf = self.kf.clone();
+        let feature_length = *self.metric.feature_length();
 
         let gated_metric = Rc::new(
             move |tracks: &[Track],
@@ -156,7 +159,7 @@ impl Tracker {
                 let detection_indices = detection_indices.unwrap();
                 let track_indices = track_indices.unwrap();
 
-                let mut features = Array2::<f32>::zeros((0, 128));
+                let mut features = Array2::<f32>::zeros((0, feature_length));
                 detection_indices.iter().for_each(|i| {
                     features
                         .push_row(dets.get(*i).unwrap().feature().view())
@@ -202,7 +205,7 @@ impl Tracker {
         let (matches_a, unmatched_tracks_a, unmatched_detections) =
             linear_assignment::matching_cascade(
                 gated_metric,
-                self.metric.matching_threshold(),
+                *self.metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
                 detections,
@@ -252,7 +255,7 @@ impl Tracker {
             self.next_id,
             self.n_init,
             self.max_age,
-            Some(stack![Axis(0), *detection.feature()]),
+            Some(detection.feature().clone().insert_axis(Axis(0))),
         ));
         self.next_id += 1;
     }
@@ -298,7 +301,7 @@ mod tests {
         let d2_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
         let d3_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
 
-        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None);
+        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
         for iteration in 0..iterations {
@@ -385,7 +388,7 @@ mod tests {
                         tracker
                             .metric
                             .track_features(*track.track_id())
-                            .unwrap_or(&Array2::<f32>::zeros((0, 128)))
+                            .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
                             .nrows(),
                     );
                 }
