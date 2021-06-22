@@ -10,7 +10,7 @@ use ndarray::*;
 /// # Examples
 ///
 /// ```
-/// use deepsort_rs::{Detection, Metric, NearestNeighborDistanceMetric, Tracker};
+/// use deepsort_rs::{BoundingBox, Detection, Metric, NearestNeighborDistanceMetric, Tracker};
 /// use ndarray::*;
 ///
 /// // instantiate tracker with default parameters
@@ -20,9 +20,9 @@ use ndarray::*;
 /// // create a detection
 /// // feature would be the feature vector from the cosine metric learning model output
 /// let detection = Detection::new(
-///     arr1::<f32>(&[0.0, 0.0, 5.0, 5.0]),
+///     BoundingBox::new(0.0, 0.0, 5.0, 5.0),
 ///     1.0,
-///     Some(Array1::<f32>::from_elem(128, 0.0)),
+///     Some(vec![0.0; 128]),
 /// );
 ///
 /// // predict then add 0..n detections
@@ -303,10 +303,10 @@ mod tests {
         let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 8 * iterations);
 
         // create the feature vectors
-        let d0_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
-        let d1_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
-        let d2_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
-        let d3_feat = Array1::from_iter(normal_vec(&mut rng, 0.0, 1.0, 128));
+        let d0_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
+        let d1_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
+        let d2_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
+        let d3_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
 
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
         let mut tracker = Tracker::new(metric, None, None, None);
@@ -316,12 +316,12 @@ mod tests {
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0 = Detection::new(
-                arr1::<f32>(&[
+                BoundingBox::new(
                     d0_x,
                     d0_y,
                     10.0 + scale_jitter.pop().unwrap(),
                     10.0 + scale_jitter.pop().unwrap(),
-                ]),
+                ),
                 1.0,
                 Some(d0_feat.clone()),
             );
@@ -330,12 +330,12 @@ mod tests {
             let d1_x = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1 = Detection::new(
-                arr1::<f32>(&[
+                BoundingBox::new(
                     d1_x,
                     d1_y,
                     8.0 + scale_jitter.pop().unwrap(),
                     8.0 + scale_jitter.pop().unwrap(),
-                ]),
+                ),
                 1.0,
                 Some(d1_feat.clone()),
             );
@@ -344,12 +344,12 @@ mod tests {
             let d2_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d2_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d2 = Detection::new(
-                arr1::<f32>(&[
+                BoundingBox::new(
                     d2_x,
                     d2_y,
                     6.0 + scale_jitter.pop().unwrap(),
                     6.0 + scale_jitter.pop().unwrap(),
-                ]),
+                ),
                 1.0,
                 Some(d2_feat.clone()),
             );
@@ -358,12 +358,12 @@ mod tests {
             let d3_x = 0.0 + (iteration as f32 * 0.1) + movement_jitter.pop().unwrap();
             let d3_y = 0.0 + ((iteration - 50) as f32) + movement_jitter.pop().unwrap();
             let d3 = Detection::new(
-                arr1::<f32>(&[
+                BoundingBox::new(
                     d3_x,
                     d3_y,
                     5.0 + scale_jitter.pop().unwrap(),
                     5.0 + scale_jitter.pop().unwrap(),
-                ]),
+                ),
                 1.0,
                 Some(d3_feat.clone()),
             );
@@ -449,12 +449,12 @@ mod tests {
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0 = Detection::new(
-                arr1::<f32>(&[
+                BoundingBox::new(
                     d0_x,
                     d0_y,
                     10.0 + scale_jitter.pop().unwrap(),
                     10.0 + scale_jitter.pop().unwrap(),
-                ]),
+                ),
                 1.0,
                 None,
             );
@@ -463,12 +463,12 @@ mod tests {
             let d1_x = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1 = Detection::new(
-                arr1::<f32>(&[
+                BoundingBox::new(
                     d1_x,
                     d1_y,
                     8.0 + scale_jitter.pop().unwrap(),
                     8.0 + scale_jitter.pop().unwrap(),
-                ]),
+                ),
                 1.0,
                 None,
             );

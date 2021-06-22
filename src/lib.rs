@@ -9,7 +9,7 @@ mod nn_matching;
 mod track;
 mod tracker;
 
-pub use detection::Detection;
+pub use detection::{BoundingBox, Detection};
 pub use kalman_filter::KalmanFilter;
 pub use linear_assignment::Match;
 pub use nn_matching::{Metric, NearestNeighborDistanceMetric};

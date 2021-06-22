@@ -194,9 +194,9 @@ impl Track {
 
 #[cfg(test)]
 mod tests {
-    use crate::Detection;
-    use crate::KalmanFilter;
-    use crate::Track;
+    use std::iter::FromIterator;
+
+    use crate::*;
     use ndarray::*;
 
     #[test]
@@ -323,9 +323,9 @@ mod tests {
         track.predict(&kf);
 
         let detection = Detection::new(
-            array![2.0, 3.0, 4.0, 5.0],
+            BoundingBox::new(2.0, 3.0, 4.0, 5.0),
             1.0,
-            Some(Array::range(0.0, 128.0, 1.0)),
+            Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
         track.update(&kf, &detection);
 

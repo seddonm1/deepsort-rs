@@ -116,9 +116,9 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
         let t1 = Track::new(mean, covariance, 1, 0, 30, None);
 
-        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, None);
-        let d1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, None);
-        let d2 = Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, None);
+        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None);
+        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0, None);
+        let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0, None);
 
         let cost_matrix = iou_matching::iou_cost(&vec![t0, t1], &vec![d0, d1, d2], None, None);
 
