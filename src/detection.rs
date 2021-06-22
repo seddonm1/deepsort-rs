@@ -41,6 +41,26 @@ impl BoundingBox {
             height,
         }
     }
+
+    /// Returns the top of the bounding box
+    pub fn top(&self) -> &f32 {
+        &self.top
+    }
+
+    /// Returns the left of the bounding box
+    pub fn left(&self) -> &f32 {
+        &self.left
+    }
+
+    /// Returns the width of the bounding box
+    pub fn width(&self) -> &f32 {
+        &self.width
+    }
+
+    /// Returns the height of the bounding box
+    pub fn height(&self) -> &f32 {
+        &self.height
+    }
 }
 
 /// Detection represents a bounding box detection in a single image.
@@ -100,6 +120,7 @@ impl Detection {
         ]
     }
 
+    /// Returns a BoundingBox of the detection co-ordinates
     pub fn to_bbox(&self) -> BoundingBox {
         BoundingBox::new(self.tlwh[0], self.tlwh[1], self.tlwh[2], self.tlwh[3])
     }
@@ -112,14 +133,14 @@ mod tests {
 
     #[test]
     fn to_tlbr() {
-        let detection = Detection::new(BoundingBox::new(1.0, 2.0, 13.0, 4.0), 1.0, None);
+        let detection = Detection::new(BoundingBox::new(1.0, 2.0, 13.0, 4.0), 1.0,  None);
 
         assert_eq!(detection.to_tlbr(), arr1::<f32>(&[1.0, 2.0, 14.0, 6.0]));
     }
 
     #[test]
     fn to_xyah() {
-        let detection = Detection::new(BoundingBox::new(1.0, 2.0, 13.0, 4.0), 1.0, None);
+        let detection = Detection::new(BoundingBox::new(1.0, 2.0, 13.0, 4.0), 1.0,  None);
 
         assert_eq!(detection.to_xyah(), arr1::<f32>(&[7.5, 4.0, 3.25, 4.0]));
     }

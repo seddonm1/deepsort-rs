@@ -1,7 +1,6 @@
 use ndarray::*;
 
-use crate::Detection;
-use crate::KalmanFilter;
+use crate::*;
 
 /**
 Enumeration type for the single target track state:
@@ -130,6 +129,12 @@ impl Track {
         tlbr[2] += tlbr[0];
         tlbr[3] += tlbr[1];
         tlbr
+    }
+
+    /// Returns a BoundingBox of the detection co-ordinates
+    pub fn to_bbox(&self) -> BoundingBox {
+        let tlwh = self.to_tlwh();
+        BoundingBox::new(tlwh[0], tlwh[1], tlwh[2], tlwh[3])
     }
 
     /// Propagate the state distribution to the current time step using a Kalman filter prediction step.

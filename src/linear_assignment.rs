@@ -305,12 +305,12 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[0.5, 1.5, 2.5, 3.5]));
         let t5 = Track::new(mean, covariance, 5, 0, 30, None);
 
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0, None);
-        let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0, None);
+        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0,  None);
+        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0,  None);
+        let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0,  None);
         let d3 = Detection::new(BoundingBox::new(-16.0, 2.0, 45.0, 6.0), 1.0, None);
         let d4 = Detection::new(BoundingBox::new(-12.5, -2.0, 30.0, 36.0), 1.0, None);
-        let d5 = Detection::new(BoundingBox::new(-1.0, -12.5, 45.0, 45.0), 1.0, None);
+        let d5 = Detection::new(BoundingBox::new(-1.0, -12.5, 45.0, 45.0), 1.0,  None);
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
@@ -346,11 +346,11 @@ mod tests {
         let t5 = Track::new(mean, covariance, 5, 0, 30, None);
 
         let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0, None);
+        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0,  None);
         let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0, None);
-        let d3 = Detection::new(BoundingBox::new(-16.0, 2.0, 45.0, 6.0), 1.0, None);
-        let d4 = Detection::new(BoundingBox::new(-12.5, -2.0, 30.0, 36.0), 1.0, None);
-        let d5 = Detection::new(BoundingBox::new(-1.0, -12.5, 45.0, 45.0), 1.0, None);
+        let d3 = Detection::new(BoundingBox::new(-16.0, 2.0, 45.0, 6.0), 1.0,  None);
+        let d4 = Detection::new(BoundingBox::new(-12.5, -2.0, 30.0, 36.0), 1.0,  None);
+        let d5 = Detection::new(BoundingBox::new(-1.0, -12.5, 45.0, 45.0), 1.0,  None);
 
         let (matches, mut unmatched_tracks, mut unmatched_detections) =
             linear_assignment::matching_cascade(
@@ -378,7 +378,7 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
         let t0 = Track::new(mean, covariance, 0, 0, 30, None);
 
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None);
+        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0,  None);
 
         let cost_matrix = linear_assignment::gate_cost_matrix(
             kf,

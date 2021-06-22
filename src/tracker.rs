@@ -11,7 +11,6 @@ use ndarray::*;
 ///
 /// ```
 /// use deepsort_rs::{BoundingBox, Detection, Metric, NearestNeighborDistanceMetric, Tracker};
-/// use ndarray::*;
 ///
 /// // instantiate tracker with default parameters
 /// let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
