@@ -79,13 +79,13 @@ pub fn min_cost_matching(
     if detection_indices.is_empty() || track_indices.is_empty() {
         (vec![], track_indices, detection_indices)
     } else {
-        let mut cost_matrix: Array2<f32> = (distance_metric)(
+        let cost_matrix: Array2<f32> = (distance_metric)(
             tracks,
             detections,
             Some(track_indices.clone()),
             Some(detection_indices.clone()),
-        );
-        cost_matrix.mapv_inplace(|v| v.min(max_distance + 1e-5));
+        )
+        .mapv(|v| v.min(max_distance + 1e-5));
 
         // scipy.optimize.linear_sum_assignment truncates rows to num columns:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
@@ -305,20 +305,12 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[0.5, 1.5, 2.5, 3.5]));
         let t5 = Track::new(mean, covariance, 5, 0, 30, None);
 
-        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
-        let d1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, arr1::<f32>(&[]));
-        let d2 = Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, arr1::<f32>(&[]));
-        let d3 = Detection::new(arr1::<f32>(&[-16.0, 2.0, 45.0, 6.0]), 1.0, arr1::<f32>(&[]));
-        let d4 = Detection::new(
-            arr1::<f32>(&[-12.5, -2.0, 30.0, 36.0]),
-            1.0,
-            arr1::<f32>(&[]),
-        );
-        let d5 = Detection::new(
-            arr1::<f32>(&[-1.0, -12.5, 45.0, 45.0]),
-            1.0,
-            arr1::<f32>(&[]),
-        );
+        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, None);
+        let d1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, None);
+        let d2 = Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, None);
+        let d3 = Detection::new(arr1::<f32>(&[-16.0, 2.0, 45.0, 6.0]), 1.0, None);
+        let d4 = Detection::new(arr1::<f32>(&[-12.5, -2.0, 30.0, 36.0]), 1.0, None);
+        let d5 = Detection::new(arr1::<f32>(&[-1.0, -12.5, 45.0, 45.0]), 1.0, None);
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
@@ -353,20 +345,12 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[0.5, 1.5, 2.5, 3.5]));
         let t5 = Track::new(mean, covariance, 5, 0, 30, None);
 
-        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
-        let d1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, arr1::<f32>(&[]));
-        let d2 = Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, arr1::<f32>(&[]));
-        let d3 = Detection::new(arr1::<f32>(&[-16.0, 2.0, 45.0, 6.0]), 1.0, arr1::<f32>(&[]));
-        let d4 = Detection::new(
-            arr1::<f32>(&[-12.5, -2.0, 30.0, 36.0]),
-            1.0,
-            arr1::<f32>(&[]),
-        );
-        let d5 = Detection::new(
-            arr1::<f32>(&[-1.0, -12.5, 45.0, 45.0]),
-            1.0,
-            arr1::<f32>(&[]),
-        );
+        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, None);
+        let d1 = Detection::new(arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]), 1.0, None);
+        let d2 = Detection::new(arr1::<f32>(&[-17.0, 1.5, 42.0, 7.0]), 1.0, None);
+        let d3 = Detection::new(arr1::<f32>(&[-16.0, 2.0, 45.0, 6.0]), 1.0, None);
+        let d4 = Detection::new(arr1::<f32>(&[-12.5, -2.0, 30.0, 36.0]), 1.0, None);
+        let d5 = Detection::new(arr1::<f32>(&[-1.0, -12.5, 45.0, 45.0]), 1.0, None);
 
         let (matches, mut unmatched_tracks, mut unmatched_detections) =
             linear_assignment::matching_cascade(
@@ -394,7 +378,7 @@ mod tests {
         let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
         let t0 = Track::new(mean, covariance, 0, 0, 30, None);
 
-        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, arr1::<f32>(&[]));
+        let d0 = Detection::new(arr1::<f32>(&[3.0, 4.0, 5.0, 6.0]), 1.0, None);
 
         let cost_matrix = linear_assignment::gate_cost_matrix(
             kf,

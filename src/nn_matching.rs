@@ -132,26 +132,25 @@ impl NearestNeighborDistanceMetric {
     pub fn partial_fit(
         &mut self,
         features: &Array2<f32>,
-        targets: &Array1<usize>,
+        targets: &[usize],
         active_targets: &[usize],
     ) {
-        if !targets.is_empty() {
-            Zip::from(features.rows())
-                .and(targets)
-                .for_each(|feature, target| match self.samples.get_mut(target) {
-                    Some(target_features) => {
-                        target_features.push_row(feature).unwrap();
-                        if let Some(budget) = &self.budget {
-                            target_features.slice(s![-budget.., ..]);
-                        }
+        targets
+            .iter()
+            .zip(features.rows().into_iter())
+            .for_each(|(target, feature)| match self.samples.get_mut(target) {
+                Some(target_features) => {
+                    target_features.push_row(feature).unwrap();
+                    if let Some(budget) = &self.budget {
+                        target_features.slice(s![-budget.., ..]);
                     }
-                    None => {
-                        let mut target_features = Array2::<f32>::zeros((0, feature.len()));
-                        target_features.push_row(feature).unwrap();
-                        self.samples.insert(target.to_owned(), target_features);
-                    }
-                });
-        }
+                }
+                None => {
+                    let mut target_features = Array2::<f32>::zeros((0, feature.len()));
+                    target_features.push_row(feature).unwrap();
+                    self.samples.insert(target.to_owned(), target_features);
+                }
+            });
 
         self.samples.retain(|k, _| active_targets.contains(k));
     }
@@ -166,12 +165,22 @@ impl NearestNeighborDistanceMetric {
     /// # Returns
     ///
     /// A cost matrix of shape len(targets), len(features), where element (i, j) contains the closest squared distance between `targets[i]` and `features[j]`.
-    pub fn distance(&self, features: &Array2<f32>, targets: &[usize]) -> Array2<f32> {
-        let mut cost_matrix = Array2::<f32>::zeros((0, features.nrows()));
+    pub fn distance(
+        &self,
+        features: &Array2<f32>,
+        detections: &[usize],
+        targets: &[usize],
+    ) -> Array2<f32> {
+        let mut cost_matrix = Array2::<f32>::zeros((0, detections.len()));
         targets.iter().for_each(|target| {
-            cost_matrix
-                .push_row((self.metric)(self.samples.get(target).unwrap(), features).view())
-                .unwrap();
+            match self.samples.get(target) {
+                Some(samples) => cost_matrix
+                    .push_row((self.metric)(samples, features).view())
+                    .unwrap(),
+                None => cost_matrix
+                    .push_row(Array1::<f32>::from_elem(detections.len(), 1.0).view())
+                    .unwrap(),
+            };
         });
         cost_matrix
     }
@@ -196,7 +205,7 @@ mod tests {
     #[test]
     fn partial_fit() {
         let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-        metric.partial_fit(&array![[]], &array![], &vec![]);
+        metric.partial_fit(&array![[]], &vec![], &vec![]);
 
         metric.partial_fit(
             &stack![
@@ -204,7 +213,7 @@ mod tests {
                 Array::range(0.0, 128.0, 1.0),
                 Array::range(0.0, 128.0, 1.0)
             ],
-            &array![0, 1],
+            &vec![0, 1],
             &vec![0, 1],
         );
         assert_eq!(
@@ -218,7 +227,7 @@ mod tests {
 
         metric.partial_fit(
             &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
-            &array![0],
+            &vec![0],
             &vec![0, 1],
         );
         assert_eq!(
@@ -236,7 +245,7 @@ mod tests {
 
         metric.partial_fit(
             &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
-            &array![1],
+            &vec![1],
             &vec![1],
         );
         assert_eq!(metric.samples.get(&0), None);
@@ -270,7 +279,7 @@ mod tests {
                 Array::range(0.0, 128.0, 1.0),
                 Array::range(1.0, 129.0, 1.0)
             ],
-            &array![0, 1],
+            &vec![0, 1],
             &vec![0, 1],
         );
 
@@ -280,6 +289,7 @@ mod tests {
                 Array::range(0.1, 128.1, 1.0),
                 Array::range(1.1, 129.1, 1.0)
             ],
+            &vec![0, 1],
             &vec![0, 1],
         );
 

@@ -22,7 +22,7 @@ use ndarray::*;
 /// let detection = Detection::new(
 ///     arr1::<f32>(&[0.0, 0.0, 5.0, 5.0]),
 ///     1.0,
-///     Array1::<f32>::from_elem(128, 0.0),
+///     Some(Array1::<f32>::from_elem(128, 0.0)),
 /// );
 ///
 /// // predict then add 0..n detections
@@ -142,7 +142,7 @@ impl Tracker {
             });
 
         self.metric
-            .partial_fit(&features, &ArrayBase::from(targets), &active_targets)
+            .partial_fit(&features, &targets, &active_targets)
     }
 
     fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
@@ -161,16 +161,16 @@ impl Tracker {
 
                 let mut features = Array2::<f32>::zeros((0, feature_length));
                 detection_indices.iter().for_each(|i| {
-                    features
-                        .push_row(dets.get(*i).unwrap().feature().view())
-                        .unwrap()
+                    if let Some(feature) = dets.get(*i).unwrap().feature() {
+                        features.push_row(feature.view()).unwrap()
+                    }
                 });
                 let targets = track_indices
                     .iter()
                     .map(|i| *tracks.get(*i).unwrap().track_id())
                     .collect::<Vec<usize>>();
 
-                let cost_matrix = metric.distance(&features, &targets);
+                let cost_matrix = metric.distance(&features, &detection_indices, &targets);
 
                 linear_assignment::gate_cost_matrix(
                     kf.clone(),
@@ -208,7 +208,7 @@ impl Tracker {
                 *self.metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
-                detections,
+                &detections,
                 Some(confirmed_tracks),
                 None,
             );
@@ -218,7 +218,10 @@ impl Tracker {
             unconfirmed_tracks,
             unmatched_tracks_a
                 .iter()
-                .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() == 0)
+                .filter(|k| {
+                    let track = self.tracks.get(**k).unwrap();
+                    *track.time_since_update() == 0 || track.features().nrows() == 0
+                })
                 .map(|v| v.to_owned())
                 .collect::<Vec<usize>>(),
         ]
@@ -249,13 +252,17 @@ impl Tracker {
 
     fn initiate_track(&mut self, detection: Detection) {
         let (mean, covariance) = self.kf.initiate(&detection.to_xyah());
+        let feature = detection
+            .feature()
+            .clone()
+            .map(|feature| feature.insert_axis(Axis(0)));
         self.tracks.push(Track::new(
             mean,
             covariance,
             self.next_id,
             self.n_init,
             self.max_age,
-            Some(detection.feature().clone().insert_axis(Axis(0))),
+            feature,
         ));
         self.next_id += 1;
     }
@@ -316,7 +323,7 @@ mod tests {
                     10.0 + scale_jitter.pop().unwrap(),
                 ]),
                 1.0,
-                d0_feat.clone(),
+                Some(d0_feat.clone()),
             );
 
             // move down to left
@@ -330,7 +337,7 @@ mod tests {
                     8.0 + scale_jitter.pop().unwrap(),
                 ]),
                 1.0,
-                d1_feat.clone(),
+                Some(d1_feat.clone()),
             );
 
             // move up to left
@@ -344,7 +351,7 @@ mod tests {
                     6.0 + scale_jitter.pop().unwrap(),
                 ]),
                 1.0,
-                d2_feat.clone(),
+                Some(d2_feat.clone()),
             );
 
             // move up and right
@@ -358,7 +365,7 @@ mod tests {
                     5.0 + scale_jitter.pop().unwrap(),
                 ]),
                 1.0,
-                d3_feat.clone(),
+                Some(d3_feat.clone()),
             );
 
             &tracker.predict();
@@ -417,6 +424,100 @@ mod tests {
         assert_eq!(
             track.to_tlwh(),
             arr1::<f32>(&[10.129211, 48.62851, 5.1298714, 5.143466])
+        );
+    }
+
+    #[test]
+    fn tracker_no_features() {
+        let iterations: i32 = 100;
+        let log = true;
+
+        // deterministic generator
+        let mut rng = Pcg32::seed_from_u64(0);
+
+        // create random movement/scale this is a vectors so it can be easily copied to python for comparison
+        let mut movement_jitter = (0..8 * iterations)
+            .map(|_| next_f32(&mut rng))
+            .collect::<Vec<f32>>();
+        let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 8 * iterations);
+
+        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
+        let mut tracker = Tracker::new(metric, None, None, None);
+
+        for iteration in 0..iterations {
+            // move up to right
+            let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
+            let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
+            let d0 = Detection::new(
+                arr1::<f32>(&[
+                    d0_x,
+                    d0_y,
+                    10.0 + scale_jitter.pop().unwrap(),
+                    10.0 + scale_jitter.pop().unwrap(),
+                ]),
+                1.0,
+                None,
+            );
+
+            // move down to left
+            let d1_x = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
+            let d1_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
+            let d1 = Detection::new(
+                arr1::<f32>(&[
+                    d1_x,
+                    d1_y,
+                    8.0 + scale_jitter.pop().unwrap(),
+                    8.0 + scale_jitter.pop().unwrap(),
+                ]),
+                1.0,
+                None,
+            );
+
+            &tracker.predict();
+
+            &tracker.update(&[d0, d1]);
+
+            // for debugging
+            if log {
+                for track in &tracker.tracks {
+                    println!(
+                        "{}: {:?} {:?} {:?} {:?}",
+                        iteration,
+                        track.track_id(),
+                        track.state(),
+                        track.to_tlwh(),
+                        tracker
+                            .metric
+                            .track_features(*track.track_id())
+                            .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
+                            .nrows(),
+                    );
+                }
+            }
+        }
+
+        let track = tracker
+            .tracks
+            .iter()
+            .filter(|track| track.track_id() == &1)
+            .collect::<Vec<&Track>>();
+        let track = track.first().unwrap();
+        assert!(track.is_confirmed());
+        assert_eq!(
+            track.to_tlwh(),
+            arr1::<f32>(&[99.2418, 99.21735, 9.979219, 9.984485])
+        );
+
+        let track = tracker
+            .tracks
+            .iter()
+            .filter(|track| track.track_id() == &2)
+            .collect::<Vec<&Track>>();
+        let track = track.first().unwrap();
+        assert!(track.is_confirmed());
+        assert_eq!(
+            track.to_tlwh(),
+            arr1::<f32>(&[1.294354, 1.1528587, 8.003455, 8.0692625])
         );
     }
 }

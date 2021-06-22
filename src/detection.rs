@@ -8,7 +8,7 @@ pub struct Detection {
     /// Detection confidence score.
     confidence: f32,
     /// A feature vector that describes the object contained in this image.
-    feature: Array1<f32>,
+    feature: Option<Array1<f32>>,
 }
 
 impl Detection {
@@ -19,7 +19,7 @@ impl Detection {
     /// - `tlwh`: Bounding box in top, left, width, height format.
     /// - `confidence`: Detection confidence score.
     /// - `feature`: A feature vector that describes the object contained in this image.
-    pub fn new(tlwh: Array1<f32>, confidence: f32, feature: Array1<f32>) -> Detection {
+    pub fn new(tlwh: Array1<f32>, confidence: f32, feature: Option<Array1<f32>>) -> Detection {
         assert!(tlwh.len() == 4);
         Detection {
             tlwh,
@@ -34,7 +34,7 @@ impl Detection {
     }
 
     /// Returns the feature array of the detection
-    pub fn feature(&self) -> &Array1<f32> {
+    pub fn feature(&self) -> &Option<Array1<f32>> {
         &self.feature
     }
 
@@ -66,14 +66,14 @@ mod tests {
 
     #[test]
     fn to_tlbr() {
-        let detection = Detection::new(array![1.0f32, 2.0f32, 3.0f32, 4.0f32], 1.0, array![]);
+        let detection = Detection::new(array![1.0f32, 2.0f32, 3.0f32, 4.0f32], 1.0, None);
 
         assert_eq!(detection.to_tlbr(), arr1::<f32>(&[1.0, 2.0, 4.0, 6.0]));
     }
 
     #[test]
     fn to_xyah() {
-        let detection = Detection::new(array![1.0f32, 2.0f32, 3.0f32, 4.0f32], 1.0, array![]);
+        let detection = Detection::new(array![1.0f32, 2.0f32, 3.0f32, 4.0f32], 1.0, None);
 
         assert_eq!(detection.to_xyah(), arr1::<f32>(&[2.5, 4.0, 0.75, 4.0]));
     }

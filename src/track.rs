@@ -156,7 +156,9 @@ impl Track {
         self.mean = mean;
         self.covariance = covariance;
 
-        self.features.push_row(detection.feature().view()).unwrap();
+        if let Some(feature) = detection.feature() {
+            self.features.push_row(feature.view()).unwrap();
+        }
 
         self.hits += 1;
         self.time_since_update = 0;
@@ -323,7 +325,7 @@ mod tests {
         let detection = Detection::new(
             array![2.0, 3.0, 4.0, 5.0],
             1.0,
-            Array::range(0.0, 128.0, 1.0),
+            Some(Array::range(0.0, 128.0, 1.0)),
         );
         track.update(&kf, &detection);
 
