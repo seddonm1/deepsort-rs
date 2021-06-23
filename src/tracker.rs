@@ -67,7 +67,6 @@ impl Tracker {
     /// - `max_iou_distance`: Gating threshold for intersection over union. Associations with cost larger than this value are disregarded. Default `0.7`.
     /// - `max_age`: Maximum number of missed misses before a track is deleted. Default `30`.
     /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames. Default `3`.
-    /// - `feature_length`: The length of the feature vector used for
     pub fn new(
         metric: NearestNeighborDistanceMetric,
         max_iou_distance: Option<f32>,
