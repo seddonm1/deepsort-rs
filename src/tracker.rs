@@ -229,8 +229,6 @@ impl Tracker {
         ]
         .concat();
 
-        println!("iou_track_candidates {:?}", iou_track_candidates);
-
         let unmatched_tracks_a = unmatched_tracks_a
             .iter()
             .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 0)
@@ -324,7 +322,7 @@ mod tests {
         let mut tracker = Tracker::new(metric, None, None, None);
 
         for iteration in 0..iterations {
-            println!("\n{}", iteration);
+        if log { println!("\n{}", iteration) };
             // move up to right
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
