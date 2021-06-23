@@ -68,13 +68,18 @@ pub fn iou_cost(
                 .push_row(Array1::from_elem(detection_indices.len(), f32::MAX).view())
                 .unwrap();
         } else {
-            let bbox = track.to_tlwh();
+            let bbox = track.bbox().to_tlwh();
             let mut candidates = Array2::<f32>::zeros((0, 4));
             detection_indices.iter().for_each(|detection_idx| {
                 candidates
                     .push(
                         Axis(0),
-                        detections.get(*detection_idx).unwrap().tlwh().view(),
+                        detections
+                            .get(*detection_idx)
+                            .unwrap()
+                            .bbox()
+                            .to_tlwh()
+                            .view(),
                     )
                     .unwrap()
             });
@@ -96,37 +101,47 @@ mod tests {
     #[test]
     fn iou() {
         let iou = iou_matching::iou(
-            &arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]),
+            &arr1::<f32>(&[0.0, 0.0, 5.0, 5.0]),
             &arr2::<f32, _>(&[
-                [3.0, 4.0, 5.0, 6.0],
-                [1.0, 2.0, 3.0, 4.0],
-                [6.0, 7.0, 8.0, 9.0],
+                [0.0, 0.0, 5.0, 5.0],
+                [1.0, 1.0, 6.0, 6.0],
+                [2.0, 2.0, 7.0, 7.0],
+                [3.0, 3.0, 8.0, 8.0],
+                [4.0, 4.0, 9.0, 9.0],
+                [5.0, 5.0, 10.0, 10.0],
             ]),
         );
-        assert_eq!(iou, arr1::<f32>(&[0.3846154, 0.0, 0.21276596]));
+        assert_eq!(
+            iou,
+            arr1::<f32>(&[1.0, 0.35555556, 0.13846155, 0.047058824, 0.00952381, 0.0])
+        );
     }
 
     #[test]
     fn iou_cost() {
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
-        let t0 = Track::new(mean, covariance, 0, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
+        let t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
 
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
-        let t1 = Track::new(mean, covariance, 1, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(5.0, 5.0, 5.0, 5.0));
+        let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
 
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0,  None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0,  None);
-        let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0,  None);
+        let d0 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None);
+        let d1 = Detection::new(BoundingBox::new(1.0, 1.0, 5.0, 5.0), 1.0, None, None);
+        let d2 = Detection::new(BoundingBox::new(2.0, 2.0, 5.0, 5.0), 1.0, None, None);
+        let d3 = Detection::new(BoundingBox::new(3.0, 3.0, 5.0, 5.0), 1.0, None, None);
+        let d4 = Detection::new(BoundingBox::new(4.0, 4.0, 5.0, 5.0), 1.0, None, None);
+        let d5 = Detection::new(BoundingBox::new(5.0, 5.0, 5.0, 5.0), 1.0, None, None);
 
-        let cost_matrix = iou_matching::iou_cost(&vec![t0, t1], &vec![d0, d1, d2], None, None);
+        let cost_matrix =
+            iou_matching::iou_cost(&vec![t0, t1], &vec![d0, d1, d2, d3, d4, d5], None, None);
 
         assert_eq!(
             cost_matrix,
             arr2::<f32, _>(&[
-                [0.92537313, 0.95918367, 0.0],
-                [0.93877551, 0.89655172, 0.74522293]
+                [0.0, 0.5294118, 0.7804878, 0.9130435, 0.97959185, 1.0],
+                [1.0, 0.97959185, 0.9130435, 0.7804878, 0.5294118, 0.0]
             ])
         );
     }

@@ -257,7 +257,7 @@ pub fn gate_cost_matrix(
     let mut measurements = Array2::zeros((0, 4));
     detection_indices.iter().for_each(|i| {
         measurements
-            .push_row(detections.get(*i).unwrap().to_xyah().view())
+            .push_row(detections.get(*i).unwrap().bbox().to_xyah().view())
             .unwrap()
     });
 
@@ -292,73 +292,55 @@ mod tests {
     fn min_cost_matching() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
-        let t0 = Track::new(mean, covariance, 0, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
-        let t1 = Track::new(mean, covariance, 1, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.5, 3.5, 4.5, 5.5]));
-        let t2 = Track::new(mean, covariance, 2, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[3.5, 4.5, 5.5, 6.5]));
-        let t3 = Track::new(mean, covariance, 3, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[5.5, 6.5, 7.5, 8.5]));
-        let t4 = Track::new(mean, covariance, 4, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[0.5, 1.5, 2.5, 3.5]));
-        let t5 = Track::new(mean, covariance, 5, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
+        let t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
+        let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
+        let t2 = Track::new(mean, covariance, 2, 1.0, None, 0, 30, None);
 
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0,  None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0,  None);
-        let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0,  None);
-        let d3 = Detection::new(BoundingBox::new(-16.0, 2.0, 45.0, 6.0), 1.0, None);
-        let d4 = Detection::new(BoundingBox::new(-12.5, -2.0, 30.0, 36.0), 1.0, None);
-        let d5 = Detection::new(BoundingBox::new(-1.0, -12.5, 45.0, 45.0), 1.0,  None);
+        let d0 = Detection::new(BoundingBox::new(10.0, 10.0, 5.0, 5.0), 1.0, None, None);
+        let d1 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None);
+        let d2 = Detection::new(BoundingBox::new(0.5, 0.5, 5.0, 5.0), 1.0, None, None);
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
                 Rc::new(iou_matching::iou_cost),
                 0.7,
-                &[t0, t1, t2, t3, t4, t5],
-                &[d0, d1, d2, d3, d4, d5],
+                &[t0, t1, t2],
+                &[d0, d1, d2],
                 None,
                 None,
             );
 
-        assert_eq!(matches, vec![Match::new(0, 2), Match::new(3, 3)]);
-        assert_eq!(unmatched_tracks, vec![1, 2, 4, 5]);
-        assert_eq!(unmatched_detections, vec![0, 1, 4, 5]);
+        assert_eq!(matches, vec![Match::new(0, 1), Match::new(1, 2)]);
+        assert_eq!(unmatched_tracks, vec![2]);
+        assert_eq!(unmatched_detections, vec![0]);
     }
 
     #[test]
     fn matching_cascade() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
-        let mut t0 = Track::new(mean, covariance, 0, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
+        let mut t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
         *t0.time_since_update_mut() = 1;
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
-        let t1 = Track::new(mean, covariance, 1, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[2.5, 3.5, 4.5, 5.5]));
-        let t2 = Track::new(mean, covariance, 2, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[3.5, 4.5, 5.5, 6.5]));
-        let t3 = Track::new(mean, covariance, 3, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[5.5, 6.5, 7.5, 8.5]));
-        let t4 = Track::new(mean, covariance, 4, 0, 30, None);
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[0.5, 1.5, 2.5, 3.5]));
-        let t5 = Track::new(mean, covariance, 5, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
+        let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
+        let t2 = Track::new(mean, covariance, 2, 1.0, None, 0, 30, None);
 
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 2.0, 3.0, 4.0), 1.0,  None);
-        let d2 = Detection::new(BoundingBox::new(-17.0, 1.5, 42.0, 7.0), 1.0, None);
-        let d3 = Detection::new(BoundingBox::new(-16.0, 2.0, 45.0, 6.0), 1.0,  None);
-        let d4 = Detection::new(BoundingBox::new(-12.5, -2.0, 30.0, 36.0), 1.0,  None);
-        let d5 = Detection::new(BoundingBox::new(-1.0, -12.5, 45.0, 45.0), 1.0,  None);
+        let d0 = Detection::new(BoundingBox::new(10.0, 10.0, 5.0, 5.0), 1.0, None, None);
+        let d1 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None);
+        let d2 = Detection::new(BoundingBox::new(0.5, 0.5, 5.0, 5.0), 1.0, None, None);
 
         let (matches, mut unmatched_tracks, mut unmatched_detections) =
             linear_assignment::matching_cascade(
                 Rc::new(iou_matching::iou_cost),
                 0.7,
                 30,
-                &[t0, t1, t2, t3, t4, t5],
-                &[d0, d1, d2, d3, d4, d5],
+                &[t0, t1, t2],
+                &[d0, d1, d2],
                 None,
                 None,
             );
@@ -366,30 +348,33 @@ mod tests {
         unmatched_tracks.sort_unstable();
         unmatched_detections.sort_unstable();
 
-        assert_eq!(matches, vec![Match::new(0, 2)]);
-        assert_eq!(unmatched_tracks, vec![1, 2, 3, 4, 5]);
-        assert_eq!(unmatched_detections, vec![0, 1, 3, 4, 5]);
+        assert_eq!(matches, vec![Match::new(0, 1)]);
+        assert_eq!(unmatched_tracks, vec![1, 2]);
+        assert_eq!(unmatched_detections, vec![0, 2]);
     }
 
     #[test]
     fn gate_cost_matrix() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[4.0, 5.0, 6.0, 7.0]));
-        let t0 = Track::new(mean, covariance, 0, 0, 30, None);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(4.0, 5.0, 6.0, 7.0));
+        let t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
+        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None, None);
+        let d1 = Detection::new(BoundingBox::new(20.0, 20.0, 5.0, 6.0), 1.0, None, None);
 
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0,  None);
+        let cost_matrix =
+            iou_matching::iou_cost(&vec![t0.clone()], &vec![d0.clone(), d1.clone()], None, None);
 
         let cost_matrix = linear_assignment::gate_cost_matrix(
             kf,
-            arr2::<f32, _>(&[[0.2, 0.53]]),
+            cost_matrix,
             &[t0],
-            &[d0],
+            &[d0, d1],
             vec![0],
             vec![0],
             None,
             None,
         );
-        assert_eq!(cost_matrix, arr2::<f32, _>(&[[f32::MAX, 0.53]]));
+        assert_eq!(cost_matrix, arr2::<f32, _>(&[[0.6153846, 1.0]]));
     }
 }

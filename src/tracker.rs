@@ -21,6 +21,7 @@ use ndarray::*;
 /// let detection = Detection::new(
 ///     BoundingBox::new(0.0, 0.0, 5.0, 5.0),
 ///     1.0,
+///     None,
 ///     Some(vec![0.0; 128]),
 /// );
 ///
@@ -31,10 +32,11 @@ use ndarray::*;
 /// // print predictions
 /// for track in tracker.tracks() {
 ///     println!(
-///         "{} {:?} {:?}",
+///         "{} {} {:?} {:?}",
 ///         track.track_id(),
+///         track.confidence(),
 ///         track.state(),
-///         track.to_tlwh(),
+///         track.bbox().to_tlwh(),
 ///     );
 /// };
 ///```
@@ -126,6 +128,7 @@ impl Tracker {
             .map(|track| *track.track_id())
             .collect();
 
+        // For any confirmed tracks 'partial_fit' the features into the metric.samples hashmap and remove from track
         let feature_length = *self.metric.feature_length();
         let mut features = Array2::<f32>::zeros((0, feature_length));
         let mut targets: Vec<usize> = vec![];
@@ -226,6 +229,8 @@ impl Tracker {
         ]
         .concat();
 
+        println!("iou_track_candidates {:?}", iou_track_candidates);
+
         let unmatched_tracks_a = unmatched_tracks_a
             .iter()
             .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 0)
@@ -250,7 +255,7 @@ impl Tracker {
     }
 
     fn initiate_track(&mut self, detection: Detection) {
-        let (mean, covariance) = self.kf.initiate(&detection.to_xyah());
+        let (mean, covariance) = self.kf.initiate(&detection.bbox());
         let feature = detection
             .feature()
             .clone()
@@ -259,6 +264,8 @@ impl Tracker {
             mean,
             covariance,
             self.next_id,
+            *detection.confidence(),
+            *detection.class_id(),
             self.n_init,
             self.max_age,
             feature,
@@ -290,16 +297,17 @@ mod tests {
     #[test]
     fn tracker() {
         let iterations: i32 = 100;
-        let log = false;
+        let log = true;
 
         // deterministic generator
         let mut rng = Pcg32::seed_from_u64(0);
 
         // create random movement/scale this is a vectors so it can be easily copied to python for comparison
-        let mut movement_jitter = (0..8 * iterations)
-            .map(|_| next_f32(&mut rng))
-            .collect::<Vec<f32>>();
-        let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 8 * iterations);
+        let mut movement_jitter = (0..1000).map(|_| next_f32(&mut rng)).collect::<Vec<f32>>();
+        let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 1000);
+
+        // println!("{:?}", movement_jitter);
+        // println!("{:?}", scale_jitter);
 
         // create the feature vectors
         let d0_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
@@ -307,10 +315,16 @@ mod tests {
         let d2_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
         let d3_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
 
+        // println!("{:?}", d0_feat);
+        // println!("{:?}", d1_feat);
+        // println!("{:?}", d2_feat);
+        // println!("{:?}", d3_feat);
+
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
         let mut tracker = Tracker::new(metric, None, None, None);
 
         for iteration in 0..iterations {
+            println!("\n{}", iteration);
             // move up to right
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
@@ -322,6 +336,7 @@ mod tests {
                     10.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 Some(d0_feat.clone()),
             );
 
@@ -336,6 +351,7 @@ mod tests {
                     8.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 Some(d1_feat.clone()),
             );
 
@@ -350,6 +366,7 @@ mod tests {
                     6.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 Some(d2_feat.clone()),
             );
 
@@ -364,6 +381,7 @@ mod tests {
                     5.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 Some(d3_feat.clone()),
             );
 
@@ -390,7 +408,7 @@ mod tests {
                         iteration,
                         track.track_id(),
                         track.state(),
-                        track.to_tlwh(),
+                        track.bbox().to_tlwh(),
                         tracker
                             .metric
                             .track_features(*track.track_id())
@@ -409,8 +427,8 @@ mod tests {
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
-            track.to_tlwh(),
-            arr1::<f32>(&[98.73315, 0.65894794, 5.728961, 5.717063])
+            track.bbox().to_tlwh(),
+            arr1::<f32>(&[99.12867, 1.0377614, 6.1343956, 6.1184144])
         );
 
         let track = tracker
@@ -421,8 +439,8 @@ mod tests {
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
-            track.to_tlwh(),
-            arr1::<f32>(&[10.129211, 48.62851, 5.1298714, 5.143466])
+            track.bbox().to_tlwh(),
+            arr1::<f32>(&[9.640262, 48.84033, 5.1905212, 5.113961])
         );
     }
 
@@ -456,6 +474,7 @@ mod tests {
                 ),
                 1.0,
                 None,
+                None,
             );
 
             // move down to left
@@ -469,6 +488,7 @@ mod tests {
                     8.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 None,
             );
 
@@ -484,7 +504,7 @@ mod tests {
                         iteration,
                         track.track_id(),
                         track.state(),
-                        track.to_tlwh(),
+                        track.bbox().to_tlbr(),
                         tracker
                             .metric
                             .track_features(*track.track_id())
@@ -503,7 +523,7 @@ mod tests {
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
-            track.to_tlwh(),
+            track.bbox().to_tlwh(),
             arr1::<f32>(&[99.2418, 99.21735, 9.979219, 9.984485])
         );
 
@@ -515,7 +535,7 @@ mod tests {
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
-            track.to_tlwh(),
+            track.bbox().to_tlwh(),
             arr1::<f32>(&[1.294354, 1.1528587, 8.003455, 8.0692625])
         );
     }

@@ -9,7 +9,7 @@ Enumeration type for the single target track state:
 - Then, the track state is changed to `confirmed`.
 - Tracks that are no longer alive are classified as `deleted` to mark them for removal from the set of active tracks.
 */
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum TrackState {
     Tentative,
     Confirmed,
@@ -17,7 +17,7 @@ pub enum TrackState {
 }
 
 /// A single target track with state space `(x, y, a, h)` and associated velocities, where `(x, y)` is the center of the bounding box, `a` is the aspect ratio and `h` is the height.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Track {
     /// The current track state.
     state: TrackState,
@@ -27,6 +27,10 @@ pub struct Track {
     covariance: Array2<f32>,
     /// A unique track identifier.
     track_id: usize,
+    /// A confidence score of the latest update.
+    confidence: f32,
+    /// An optional class identifier.
+    class_id: Option<usize>,
     /// Number of consecutive detections before the track is confirmed
     n_init: usize,
     /// The maximum number of consecutive misses before the track state is set to `Deleted`.
@@ -49,13 +53,18 @@ impl Track {
     /// - `mean`: Mean vector of the initial state distribution.
     /// - `covariance`: Covariance matrix of the initial state distribution.
     /// - `track_id`: A unique track identifier.
+    /// - `confidence`: A confidence score of the latest update.
+    /// - `class_id`: An optional class identifier.
     /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
     /// - `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
     /// - `feature`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         mean: Array1<f32>,
         covariance: Array2<f32>,
         track_id: usize,
+        confidence: f32,
+        class_id: Option<usize>,
         n_init: usize,
         max_age: usize,
         feature: Option<Array2<f32>>,
@@ -65,6 +74,8 @@ impl Track {
             mean,
             covariance,
             track_id,
+            confidence,
+            class_id,
             n_init,
             max_age,
             hits: 1,
@@ -77,6 +88,16 @@ impl Track {
     /// Return the identifier of the track
     pub fn track_id(&self) -> &usize {
         &self.track_id
+    }
+
+    /// Return the confidence score of the latest update
+    pub fn confidence(&self) -> &f32 {
+        &self.confidence
+    }
+
+    /// Return the optional class identifier of the track
+    pub fn class_id(&self) -> &Option<usize> {
+        &self.class_id
     }
 
     /// Return the TrackState of the track
@@ -114,27 +135,13 @@ impl Track {
         &mut self.features
     }
 
-    /// Returns the track position bounding box in top, left, width, height format
-    pub fn to_tlwh(&self) -> Array1<f32> {
-        let w = self.mean[2] * self.mean[3];
-        let h = self.mean[3];
-        let t = self.mean[0] - (w / 2.0);
-        let l = self.mean[1] - (h / 2.0);
-        arr1::<f32>(&[t, l, w, h])
-    }
-
-    /// Returns the track position bounding box in top, left, bottom, right format, i.e., `(min x, min y, max x, max y)`.
-    pub fn to_tlbr(&self) -> Array1<f32> {
-        let mut tlbr = self.to_tlwh();
-        tlbr[2] += tlbr[0];
-        tlbr[3] += tlbr[1];
-        tlbr
-    }
-
-    /// Returns a BoundingBox of the detection co-ordinates
-    pub fn to_bbox(&self) -> BoundingBox {
-        let tlwh = self.to_tlwh();
-        BoundingBox::new(tlwh[0], tlwh[1], tlwh[2], tlwh[3])
+    /// Returns the track position bounding box
+    pub fn bbox(&self) -> BoundingBox {
+        let width = self.mean[2] * self.mean[3];
+        let height = self.mean[3];
+        let x = self.mean[0] - (width / 2.0);
+        let y = self.mean[1] - (height / 2.0);
+        BoundingBox::new(x, y, width, height)
     }
 
     /// Propagate the state distribution to the current time step using a Kalman filter prediction step.
@@ -157,9 +164,13 @@ impl Track {
     /// - `kf`: The Kalman filter.
     /// - `detection`: The associated detection.
     pub fn update(&mut self, kf: &KalmanFilter, detection: &Detection) {
-        let (mean, covariance) = kf.update(&self.mean, &self.covariance, &detection.to_xyah());
+        let (mean, covariance) =
+            kf.update(&self.mean, &self.covariance, &detection.bbox().to_xyah());
         self.mean = mean;
         self.covariance = covariance;
+
+        self.confidence = *detection.confidence();
+        self.class_id = *detection.class_id();
 
         if let Some(feature) = detection.feature() {
             self.features.push_row(feature.view()).unwrap();
@@ -206,22 +217,40 @@ mod tests {
 
     #[test]
     fn to_tlwh() {
-        let track = Track::new(array![1.0, 2.0, 3.0, 4.0], array![[]], 0, 0, 0, None);
-        assert_eq!(track.to_tlwh(), array![-5.0f32, 0.0f32, 12.0f32, 4.0f32]);
+        let track = Track::new(
+            array![1.0, 2.0, 3.0, 4.0],
+            array![[]],
+            0,
+            1.0,
+            None,
+            0,
+            0,
+            None,
+        );
+        assert_eq!(track.bbox().to_tlwh(), arr1::<f32>(&[-5.0, 0.0, 12.0, 4.0]));
     }
 
     #[test]
     fn to_tlbr() {
-        let track = Track::new(array![1.0, 2.0, 3.0, 4.0], array![[]], 0, 0, 0, None);
-        assert_eq!(track.to_tlbr(), array![-5.0f32, 0.0f32, 7.0f32, 4.0f32]);
+        let track = Track::new(
+            array![1.0, 2.0, 3.0, 4.0],
+            array![[]],
+            0,
+            1.0,
+            None,
+            0,
+            0,
+            None,
+        );
+        assert_eq!(track.bbox().to_tlbr(), arr1::<f32>(&[-5.0, 0.0, 7.0, 4.0]));
     }
 
     #[test]
     fn predict() {
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
-        let mut track = Track::new(mean, covariance, 0, 0, 0, None);
+        let mut track = Track::new(mean, covariance, 0, 1.0, None, 0, 0, None);
 
         track.predict(&kf);
 
@@ -230,7 +259,7 @@ mod tests {
         assert_eq!(track.time_since_update, 1);
         assert_eq!(
             track.mean,
-            array![1.0f32, 2.0f32, 3.0f32, 4.0f32, 0.0f32, 0.0f32, 0.0f32, 0.0f32],
+            arr1::<f32>(&[2.5, 4.0, 0.75, 4.0, 0.0, 0.0, 0.0, 0.0]),
         );
         assert_eq!(
             track.covariance,
@@ -322,14 +351,15 @@ mod tests {
     #[test]
     fn update() {
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&array![1.0, 2.0, 3.0, 4.0]);
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
-        let mut track = Track::new(mean, covariance, 0, 0, 0, None);
+        let mut track = Track::new(mean, covariance, 0, 1.0, None, 0, 0, None);
         track.predict(&kf);
 
         let detection = Detection::new(
             BoundingBox::new(2.0, 3.0, 4.0, 5.0),
             1.0,
+            None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
         track.update(&kf, &detection);
@@ -343,16 +373,16 @@ mod tests {
         );
         assert_eq!(
             track.mean,
-            array![
-                3.6033058f32,
-                5.0371904f32,
-                2.9568627f32,
-                4.867769f32,
-                0.61983466f32,
-                0.7231405f32,
-                -0.000000021568628f32,
-                0.20661156f32
-            ]
+            arr1::<f32>(&[
+                3.801653,
+                5.301653,
+                0.7509804,
+                4.867769,
+                0.30991733,
+                0.30991733,
+                0.00000000049019616,
+                0.20661156
+            ])
         );
         assert_eq!(
             track.covariance,

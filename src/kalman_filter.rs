@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use crate::BoundingBox;
+
 use ndarray::*;
 use ndarray_linalg::*;
 
@@ -81,7 +83,7 @@ impl KalmanFilter {
     ///
     /// # Arguments
     ///
-    /// - `measurement`: Bounding box coordinates (x, y, a, h) with center position (x, y), aspect ratio a, and height h.
+    /// - `bbox`: Bounding box object of the new measurement.
     ///
     /// # Returns
     ///
@@ -90,20 +92,20 @@ impl KalmanFilter {
     /// - The covariance matrix (8x8 dimensional).
     ///
     /// Unobserved velocities are initialized to 0 mean.
-    pub fn initiate(&self, measurement: &Array1<f32>) -> (Array1<f32>, Array2<f32>) {
-        let mean_pos = measurement;
+    pub fn initiate(&self, bbox: &BoundingBox) -> (Array1<f32>, Array2<f32>) {
+        let mean_pos = bbox.to_xyah();
         let mean_vel = Array1::<f32>::zeros(mean_pos.raw_dim());
-        let mean = concatenate![Axis(0), *mean_pos, mean_vel];
+        let mean = concatenate![Axis(0), mean_pos, mean_vel];
 
         let std = arr1::<f32>(&[
-            2.0 * self.std_weight_position * measurement[3],
-            2.0 * self.std_weight_position * measurement[3],
+            2.0 * self.std_weight_position * mean_pos[3],
+            2.0 * self.std_weight_position * mean_pos[3],
             1e-2,
-            2.0 * self.std_weight_position * measurement[3],
-            10.0 * self.std_weight_velocity * measurement[3],
-            10.0 * self.std_weight_velocity * measurement[3],
+            2.0 * self.std_weight_position * mean_pos[3],
+            10.0 * self.std_weight_velocity * mean_pos[3],
+            10.0 * self.std_weight_velocity * mean_pos[3],
             1e-5,
-            10.0 * self.std_weight_velocity * measurement[3],
+            10.0 * self.std_weight_velocity * mean_pos[3],
         ]);
 
         let covariance = Array2::from_diag(&std.mapv(|v| v.powi(2)).diag());
@@ -263,7 +265,7 @@ impl KalmanFilter {
 
 #[cfg(test)]
 mod tests {
-    use crate::KalmanFilter;
+    use crate::{BoundingBox, KalmanFilter};
     use ndarray::*;
 
     #[test]
@@ -298,20 +300,23 @@ mod tests {
     fn initiate() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
 
-        assert_eq!(mean, arr1::<f32>(&[1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]),);
+        assert_eq!(
+            mean,
+            arr1::<f32>(&[1.0, 2.5, 0.6666667, 3.0, 0.0, 0.0, 0.0, 0.0])
+        );
         assert_eq!(
             covariance,
             arr2::<f32, _>(&[
-                [0.16000001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                [0.0, 0.16000001, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.09, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.09, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
                 [0.0, 0.0, 0.0001, 0.0, 0.0, 0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0, 0.16000001, 0.0, 0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.09, 0.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.03515625, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.03515625, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.000000000099999994, 0.0],
-                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0625]
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.03515625]
             ]),
         );
     }
@@ -320,15 +325,18 @@ mod tests {
     fn predict() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
 
-        assert_eq!(mean, arr1::<f32>(&[1.0, 2.0, 3.0, 4.0, 0.0, 0.0, 0.0, 0.0]),);
+        assert_eq!(
+            mean,
+            arr1::<f32>(&[1.0, 2.5, 0.6666667, 3.0, 0.0, 0.0, 0.0, 0.0])
+        );
         assert_eq!(
             covariance,
             arr2::<f32, _>(&[
-                [0.26250002, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0, 0.0],
-                [0.0, 0.26250002, 0.0, 0.0, 0.0, 0.0625, 0.0, 0.0],
+                [0.14765626, 0.0, 0.0, 0.0, 0.03515625, 0.0, 0.0, 0.0],
+                [0.0, 0.14765626, 0.0, 0.0, 0.0, 0.03515625, 0.0, 0.0],
                 [
                     0.0,
                     0.0,
@@ -339,9 +347,9 @@ mod tests {
                     0.000000000099999994,
                     0.0
                 ],
-                [0.0, 0.0, 0.0, 0.26250002, 0.0, 0.0, 0.0, 0.0625],
-                [0.0625, 0.0, 0.0, 0.0, 0.063125, 0.0, 0.0, 0.0],
-                [0.0, 0.0625, 0.0, 0.0, 0.0, 0.063125, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.14765626, 0.0, 0.0, 0.0, 0.03515625],
+                [0.03515625, 0.0, 0.0, 0.0, 0.035507813, 0.0, 0.0, 0.0],
+                [0.0, 0.03515625, 0.0, 0.0, 0.0, 0.035507813, 0.0, 0.0],
                 [
                     0.0,
                     0.0,
@@ -352,7 +360,7 @@ mod tests {
                     0.00000000019999999,
                     0.0
                 ],
-                [0.0, 0.0, 0.0, 0.0625, 0.0, 0.0, 0.0, 0.063125]
+                [0.0, 0.0, 0.0, 0.03515625, 0.0, 0.0, 0.0, 0.035507813]
             ]),
         );
     }
@@ -361,17 +369,17 @@ mod tests {
     fn project() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
         let (mean, covariance) = kf.clone().project(&mean, &covariance);
 
-        assert_eq!(mean, arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]),);
+        assert_eq!(mean, arr1::<f32>(&[1.0, 2.5, 0.6666667, 3.0]));
         assert_eq!(
             covariance,
             arr2::<f32, _>(&[
-                [0.20000002, 0.0, 0.0, 0.0],
-                [0.0, 0.20000002, 0.0, 0.0],
+                [0.112500004, 0.0, 0.0, 0.0],
+                [0.0, 0.112500004, 0.0, 0.0],
                 [0.0, 0.0, 0.010100001, 0.0],
-                [0.0, 0.0, 0.0, 0.20000002]
+                [0.0, 0.0, 0.0, 0.112500004]
             ]),
         );
     }
@@ -380,30 +388,30 @@ mod tests {
     fn update() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
         let (mean, covariance) =
             kf.clone()
-                .update(&mean, &covariance, &arr1::<f32>(&[2.0, 3.0, 4.0, 5.0]));
+                .update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
 
         assert_eq!(
             mean,
             arr1::<f32>(&[
-                1.8677686,
-                2.8677688,
-                3.0196078,
-                4.867769,
-                0.20661156,
-                0.20661156,
-                0.000000009803921,
-                0.20661156
+                1.0,
+                2.0661156,
+                0.7124183,
+                3.8677685,
+                0.0,
+                -0.10330577,
+                0.000000022875815,
+                0.20661154
             ]),
         );
         assert_eq!(
             covariance,
             arr2::<f32, _>(&[
-                [0.034710735, 0.0, 0.0, 0.0, 0.008264463, 0.0, 0.0, 0.0],
-                [0.0, 0.034710735, 0.0, 0.0, 0.0, 0.008264463, 0.0, 0.0],
+                [0.019524798, 0.0, 0.0, 0.0, 0.004648762, 0.0, 0.0, 0.0],
+                [0.0, 0.019524798, 0.0, 0.0, 0.0, 0.004648762, 0.0, 0.0],
                 [
                     0.0,
                     0.0,
@@ -414,9 +422,9 @@ mod tests {
                     0.00000000009803921,
                     0.0
                 ],
-                [0.0, 0.0, 0.0, 0.034710735, 0.0, 0.0, 0.0, 0.008264463],
-                [0.00826446, 0.0, 0.0, 0.0, 0.050211776, 0.0, 0.0, 0.0],
-                [0.0, 0.00826446, 0.0, 0.0, 0.0, 0.050211776, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.019524798, 0.0, 0.0, 0.0, 0.004648762],
+                [0.00464876, 0.0, 0.0, 0.0, 0.028244127, 0.0, 0.0, 0.0],
+                [0.0, 0.00464876, 0.0, 0.0, 0.0, 0.028244127, 0.0, 0.0],
                 [
                     0.0,
                     0.0,
@@ -427,7 +435,7 @@ mod tests {
                     0.00000000019999999,
                     0.0
                 ],
-                [0.0, 0.0, 0.0, 0.00826446, 0.0, 0.0, 0.0, 0.050211776]
+                [0.0, 0.0, 0.0, 0.00464876, 0.0, 0.0, 0.0, 0.028244127]
             ]),
         );
     }
@@ -436,14 +444,18 @@ mod tests {
     fn gating_distance() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
         let (mean, covariance) = kf.clone().predict(&mean, &covariance);
         let squared_maha = kf.gating_distance(
             &mean,
             &covariance,
-            &arr2::<f32, _>(&[[2.0, 3.0, 4.0, 5.0], [3.0, 4.0, 5.0, 6.0]]),
+            &stack![
+                Axis(0),
+                BoundingBox::new(2.0, 3.0, 4.0, 5.0).to_xyah(),
+                BoundingBox::new(3.0, 4.0, 5.0, 6.0).to_xyah()
+            ],
         );
 
-        assert_eq!(squared_maha, arr1(&[107.95658, 431.82632,]));
+        assert_eq!(squared_maha, arr1(&[18.426916, 73.4081]));
     }
 }
