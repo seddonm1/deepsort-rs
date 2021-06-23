@@ -61,7 +61,7 @@ pub struct NearestNeighborDistanceMetric {
     /// The matching threshold. Samples with larger distance are considered an invalid match.
     matching_threshold: f32,
     /// If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
-    budget: Option<i32>,
+    budget: Option<usize>,
     /// The length of the feature vectors.
     feature_length: usize,
     /// A HashMap that maps from target identities to the list of samples that have been observed so far.
@@ -91,7 +91,7 @@ impl NearestNeighborDistanceMetric {
         metric: Metric,
         matching_threshold: Option<f32>,
         feature_length: Option<usize>,
-        budget: Option<i32>,
+        budget: Option<usize>,
     ) -> NearestNeighborDistanceMetric {
         let metric = match metric {
             Metric::Cosine => cosine_distance,
@@ -141,8 +141,12 @@ impl NearestNeighborDistanceMetric {
             .for_each(|(target, feature)| match self.samples.get_mut(target) {
                 Some(target_features) => {
                     target_features.push_row(feature).unwrap();
+
+                    // if sample budget is set truncate rows
                     if let Some(budget) = &self.budget {
-                        target_features.slice(s![-budget.., ..]);
+                        if target_features.nrows() > *budget {
+                            target_features.slice(s![-(*budget as i32).., ..]);
+                        }
                     }
                 }
                 None => {

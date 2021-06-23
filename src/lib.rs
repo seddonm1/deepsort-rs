@@ -15,5 +15,5 @@ pub use detection::Detection;
 pub use kalman_filter::KalmanFilter;
 pub use linear_assignment::Match;
 pub use nn_matching::{Metric, NearestNeighborDistanceMetric};
-pub use track::Track;
+pub use track::{MatchSource, Track};
 pub use tracker::Tracker;

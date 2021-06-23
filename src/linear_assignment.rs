@@ -11,6 +11,7 @@ use pathfinding::matrix::Matrix;
 pub struct Match {
     track_idx: usize,
     detection_idx: usize,
+    distance: f32,
 }
 
 impl Match {
@@ -20,21 +21,28 @@ impl Match {
     ///
     /// - `track_idx`: The match track index.
     /// - `detection_idx`: The match detection index.
-    pub fn new(track_idx: usize, detection_idx: usize) -> Match {
+    /// - `distance`: Match strength.
+    pub fn new(track_idx: usize, detection_idx: usize, distance: f32) -> Match {
         Match {
             track_idx,
             detection_idx,
+            distance,
         }
     }
 
     /// Return the track identifier of the match
-    pub fn track_idx(&self) -> usize {
-        self.track_idx
+    pub fn track_idx(&self) -> &usize {
+        &self.track_idx
     }
 
     /// Return the detection identifier of the match
-    pub fn detection_idx(&self) -> usize {
-        self.detection_idx
+    pub fn detection_idx(&self) -> &usize {
+        &self.detection_idx
+    }
+
+    /// Return the distance of the match
+    pub fn distance(&self) -> &f32 {
+        &self.distance
     }
 }
 
@@ -133,12 +141,13 @@ pub fn min_cost_matching(
             .for_each(|(row, col)| {
                 let track_idx = *track_indices.get(*row).unwrap();
                 let detection_idx = *detection_indices.get(*col).unwrap();
+                let distance = cost_matrix[[*row, *col]];
 
-                if cost_matrix[[*row, *col]] > max_distance {
+                if distance > max_distance {
                     unmatched_tracks.push(track_idx);
                     unmatched_detections.push(detection_idx);
                 } else {
-                    matches.push(Match::new(track_idx, detection_idx));
+                    matches.push(Match::new(track_idx, detection_idx, distance));
                 }
             });
 
@@ -313,7 +322,7 @@ mod tests {
                 None,
             );
 
-        assert_eq!(matches, vec![Match::new(0, 1), Match::new(1, 2)]);
+        assert_eq!(matches, vec![Match::new(0, 1, 1.0), Match::new(1, 2, 1.0)]);
         assert_eq!(unmatched_tracks, vec![2]);
         assert_eq!(unmatched_detections, vec![0]);
     }
@@ -348,7 +357,7 @@ mod tests {
         unmatched_tracks.sort_unstable();
         unmatched_detections.sort_unstable();
 
-        assert_eq!(matches, vec![Match::new(0, 1)]);
+        assert_eq!(matches, vec![Match::new(0, 1, 1.0)]);
         assert_eq!(unmatched_tracks, vec![1, 2]);
         assert_eq!(unmatched_detections, vec![0, 2]);
     }

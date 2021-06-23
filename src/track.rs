@@ -2,18 +2,26 @@ use ndarray::*;
 
 use crate::*;
 
-/**
-Enumeration type for the single target track state:
-
-- Newly created tracks are classified as `tentative` until enough evidence has been collected.
-- Then, the track state is changed to `confirmed`.
-- Tracks that are no longer alive are classified as `deleted` to mark them for removal from the set of active tracks.
-*/
+/// Enumeration type for the single target track state:
+///
+/// - Newly created tracks are classified as `Tentative` until enough evidence has been collected.
+/// - Then, the track state is changed to `Confirmed`.
+/// - Tracks that are no longer alive are classified as `Deleted` to mark them for removal from the set of active tracks.
 #[derive(Clone, Debug)]
 pub enum TrackState {
     Tentative,
     Confirmed,
     Deleted,
+}
+
+/// Enumeration type for the source of the match
+///
+/// - `NearestNeighbor` means matched via the feature vector.
+/// - `IoU` means matched via intsection over union of KalmanFilter predicted location.
+#[derive(Clone, Debug)]
+pub enum MatchSource {
+    NearestNeighbor { distance: f32 },
+    IoU { distance: f32 },
 }
 
 /// A single target track with state space `(x, y, a, h)` and associated velocities, where `(x, y)` is the center of the bounding box, `a` is the aspect ratio and `h` is the height.
@@ -27,6 +35,8 @@ pub struct Track {
     covariance: Array2<f32>,
     /// A unique track identifier.
     track_id: usize,
+    /// The source of the most recent match.
+    match_source: Option<MatchSource>,
     /// A confidence score of the latest update.
     confidence: f32,
     /// An optional class identifier.
@@ -74,6 +84,7 @@ impl Track {
             mean,
             covariance,
             track_id,
+            match_source: None,
             confidence,
             class_id,
             n_init,
@@ -103,6 +114,11 @@ impl Track {
     /// Return the TrackState of the track
     pub fn state(&self) -> &TrackState {
         &self.state
+    }
+
+    /// Return the match source of the track
+    pub fn match_source(&self) -> &Option<MatchSource> {
+        &self.match_source
     }
 
     /// Return the time since update of the track
@@ -163,12 +179,18 @@ impl Track {
     ///
     /// - `kf`: The Kalman filter.
     /// - `detection`: The associated detection.
-    pub fn update(&mut self, kf: &KalmanFilter, detection: &Detection) {
+    pub fn update(
+        &mut self,
+        kf: &KalmanFilter,
+        detection: &Detection,
+        match_source: Option<MatchSource>,
+    ) {
         let (mean, covariance) =
             kf.update(&self.mean, &self.covariance, &detection.bbox().to_xyah());
         self.mean = mean;
         self.covariance = covariance;
 
+        self.match_source = match_source;
         self.confidence = *detection.confidence();
         self.class_id = *detection.class_id();
 
@@ -362,7 +384,7 @@ mod tests {
             None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
-        track.update(&kf, &detection);
+        track.update(&kf, &detection, None);
 
         assert!(track.is_confirmed());
         assert_eq!(track.hits, 2);

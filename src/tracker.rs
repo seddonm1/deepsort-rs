@@ -103,14 +103,37 @@ impl Tracker {
     /// - `detections`: A list of detections at the current time step.
     pub fn update(&mut self, detections: &[Detection]) {
         // Run matching cascade.
-        let (matches, unmatched_tracks, unmatched_detections) = self.match_impl(detections);
+        let (features_matches, iou_matches, unmatched_tracks, unmatched_detections) =
+            self.match_impl(detections);
 
         // Update track set.
-        for m in matches {
-            self.tracks
-                .get_mut(m.track_idx())
-                .unwrap()
-                .update(&self.kf, detections.get(m.detection_idx()).unwrap());
+        for m in features_matches {
+            let track = self.tracks.get_mut(*m.track_idx()).unwrap();
+            track.update(
+                &self.kf,
+                detections.get(*m.detection_idx()).unwrap(),
+                if track.is_confirmed() {
+                    Some(MatchSource::NearestNeighbor {
+                        distance: *m.distance(),
+                    })
+                } else {
+                    None
+                },
+            );
+        }
+        for m in iou_matches {
+            let track = self.tracks.get_mut(*m.track_idx()).unwrap();
+            track.update(
+                &self.kf,
+                detections.get(*m.detection_idx()).unwrap(),
+                if track.is_confirmed() {
+                    Some(MatchSource::IoU {
+                        distance: *m.distance(),
+                    })
+                } else {
+                    None
+                },
+            );
         }
         for unmatched_track in unmatched_tracks {
             self.tracks.get_mut(unmatched_track).unwrap().mark_missed();
@@ -147,7 +170,10 @@ impl Tracker {
             .partial_fit(&features, &targets, &active_targets)
     }
 
-    fn match_impl(&self, detections: &[Detection]) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
+    fn match_impl(
+        &self,
+        detections: &[Detection],
+    ) -> (Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>) {
         let metric = self.metric.clone();
         let kf = self.kf.clone();
         let feature_length = *self.metric.feature_length();
@@ -204,7 +230,7 @@ impl Tracker {
             .collect();
 
         // Associate confirmed tracks using appearance features.
-        let (matches_a, unmatched_tracks_a, unmatched_detections) =
+        let (features_matches, features_unmatched_tracks, unmatched_detections) =
             linear_assignment::matching_cascade(
                 gated_metric,
                 *self.metric.matching_threshold(),
@@ -218,7 +244,7 @@ impl Tracker {
         // Associate remaining tracks together with unconfirmed tracks using IOU.
         let iou_track_candidates = [
             unconfirmed_tracks,
-            unmatched_tracks_a
+            features_unmatched_tracks
                 .iter()
                 .filter(|k| {
                     let track = self.tracks.get(**k).unwrap();
@@ -229,13 +255,13 @@ impl Tracker {
         ]
         .concat();
 
-        let unmatched_tracks_a = unmatched_tracks_a
+        let features_unmatched_tracks = features_unmatched_tracks
             .iter()
             .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 0)
             .map(|v| v.to_owned())
             .collect::<Vec<usize>>();
 
-        let (matches_b, unmatched_tracks_b, unmatched_detections) =
+        let (iou_matches, iou_unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
                 Rc::new(iou_matching::iou_cost),
                 self.max_iou_distance,
@@ -245,11 +271,15 @@ impl Tracker {
                 Some(unmatched_detections),
             );
 
-        let matches = [matches_a, matches_b].concat();
-        let mut unmatched_tracks = [unmatched_tracks_a, unmatched_tracks_b].concat();
+        let mut unmatched_tracks = [features_unmatched_tracks, iou_unmatched_tracks].concat();
         unmatched_tracks.dedup();
 
-        (matches, unmatched_tracks, unmatched_detections)
+        (
+            features_matches,
+            iou_matches,
+            unmatched_tracks,
+            unmatched_detections,
+        )
     }
 
     fn initiate_track(&mut self, detection: Detection) {
@@ -322,7 +352,9 @@ mod tests {
         let mut tracker = Tracker::new(metric, None, None, None);
 
         for iteration in 0..iterations {
-        if log { println!("\n{}", iteration) };
+            if log {
+                println!("\n{}", iteration)
+            };
             // move up to right
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
