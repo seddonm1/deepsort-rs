@@ -243,7 +243,11 @@ pub fn matching_cascade(
         .map(|v| *v.to_owned())
         .collect::<Vec<usize>>();
 
-    (matches, unmatched_tracks, [unmatched_detections, skipped_detections].concat())
+    (
+        matches,
+        unmatched_tracks,
+        [unmatched_detections, skipped_detections].concat(),
+    )
 }
 
 /// Invalidate infeasible entries in cost matrix based on the state distributions obtained by Kalman filtering.

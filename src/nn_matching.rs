@@ -142,10 +142,12 @@ impl NearestNeighborDistanceMetric {
                 Some(target_features) => {
                     target_features.push_row(feature).unwrap();
 
-                    // if sample budget is set truncate rows
+                    // if budget is set truncate num rows from bottom
                     if let Some(budget) = &self.budget {
                         if target_features.nrows() > *budget {
-                            target_features.slice(s![-(*budget as i32).., ..]);
+                            target_features
+                                .slice_collapse(s![-(*budget as i32).., ..])
+                                .to_owned()
                         }
                     }
                 }

@@ -89,6 +89,11 @@ impl Tracker {
         &self.tracks
     }
 
+    /// Return the metric
+    pub fn metric(&self) -> &NearestNeighborDistanceMetric {
+        &self.metric
+    }
+
     /// Propagate track state distributions one time step forward. This function should be called once every time step, before `update`.
     pub fn predict(&mut self) {
         let kf = self.kf.clone();
@@ -148,7 +153,7 @@ impl Tracker {
         let mut targets: Vec<usize> = vec![];
         self.tracks
             .iter_mut()
-            .filter(|track| track.is_confirmed())
+            .filter(|track| track.is_confirmed() && track.features().nrows() != 0)
             .for_each(|track| {
                 features = concatenate![Axis(0), features, *track.features()];
                 for _ in 0..track.features().nrows() {
