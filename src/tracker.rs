@@ -111,9 +111,9 @@ impl Tracker {
             track.update(
                 &self.kf,
                 detections.get(*m.detection_idx()).unwrap(),
-                    Some(MatchSource::NearestNeighbor {
-                        distance: *m.distance(),
-                    }),
+                Some(MatchSource::NearestNeighbor {
+                    distance: *m.distance(),
+                }),
             );
         }
         for m in iou_matches {
@@ -121,9 +121,9 @@ impl Tracker {
             track.update(
                 &self.kf,
                 detections.get(*m.detection_idx()).unwrap(),
-                    Some(MatchSource::IoU {
-                        distance: *m.distance(),
-                    })
+                Some(MatchSource::IoU {
+                    distance: *m.distance(),
+                }),
             );
         }
         for unmatched_track in unmatched_tracks {
@@ -237,9 +237,7 @@ impl Tracker {
             unconfirmed_tracks,
             features_unmatched_tracks
                 .iter()
-                .filter(|k| {
-                    *self.tracks.get(**k).unwrap().time_since_update() == 1
-                })
+                .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() == 1)
                 .map(|v| v.to_owned())
                 .collect::<Vec<usize>>(),
         ]
@@ -341,7 +339,7 @@ mod tests {
         let mut tracker = Tracker::new(metric, None, None, None);
 
         for iteration in 0..iterations {
-                println!("\n{}", iteration);
+            println!("\n{}", iteration);
             // move up to right
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
@@ -418,21 +416,21 @@ mod tests {
             }
 
             // for debugging
-                for track in &tracker.tracks {
-                    println!(
-                        "{}: {:?} {:?} {:?} {:?} {:?}",
-                        iteration,
-                        track.track_id(),
-                        track.state(),
-                        track.bbox().to_tlwh(),
-                        tracker
-                            .metric
-                            .track_features(*track.track_id())
-                            .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
-                            .nrows(),
-                        track.match_source(),
-                    );
-                }
+            for track in &tracker.tracks {
+                println!(
+                    "{}: {:?} {:?} {:?} {:?} {:?}",
+                    iteration,
+                    track.track_id(),
+                    track.state(),
+                    track.bbox().to_tlwh(),
+                    tracker
+                        .metric
+                        .track_features(*track.track_id())
+                        .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
+                        .nrows(),
+                    track.match_source(),
+                );
+            }
         }
 
         let track = tracker
@@ -509,20 +507,20 @@ mod tests {
             &tracker.update(&[d0, d1]);
 
             // for debugging
-                for track in &tracker.tracks {
-                    println!(
-                        "{}: {:?} {:?} {:?} {:?} {:?}",
-                        iteration,
-                        track.track_id(),
-                        track.state(),
-                        track.bbox().to_tlwh(),
-                        tracker
-                            .metric
-                            .track_features(*track.track_id())
-                            .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
-                            .nrows(),
-                        track.match_source(),
-                    );
+            for track in &tracker.tracks {
+                println!(
+                    "{}: {:?} {:?} {:?} {:?} {:?}",
+                    iteration,
+                    track.track_id(),
+                    track.state(),
+                    track.bbox().to_tlwh(),
+                    tracker
+                        .metric
+                        .track_features(*track.track_id())
+                        .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
+                        .nrows(),
+                    track.match_source(),
+                );
             }
         }
 

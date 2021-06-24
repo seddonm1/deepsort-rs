@@ -187,8 +187,22 @@ pub fn matching_cascade(
 ) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
     let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
 
-    let mut unmatched_detections =
-        detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
+    let unmatched_detections = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
+
+    // filter for only detections with feature vectors
+    let skipped_detections = unmatched_detections
+        .iter()
+        .filter(|detection_idx| detections.get(**detection_idx).unwrap().feature().is_none())
+        .cloned()
+        .collect::<Vec<usize>>();
+
+    // filter for only detections with feature vectors
+    let mut unmatched_detections = unmatched_detections
+        .iter()
+        .filter(|detection_idx| detections.get(**detection_idx).unwrap().feature().is_some())
+        .cloned()
+        .collect::<Vec<usize>>();
+
     let mut matches: Vec<Match> = vec![];
 
     for level in 0..cascade_depth {
@@ -229,7 +243,7 @@ pub fn matching_cascade(
         .map(|v| *v.to_owned())
         .collect::<Vec<usize>>();
 
-    (matches, unmatched_tracks, unmatched_detections)
+    (matches, unmatched_tracks, [unmatched_detections, skipped_detections].concat())
 }
 
 /// Invalidate infeasible entries in cost matrix based on the state distributions obtained by Kalman filtering.
