@@ -111,13 +111,9 @@ impl Tracker {
             track.update(
                 &self.kf,
                 detections.get(*m.detection_idx()).unwrap(),
-                if track.is_confirmed() {
                     Some(MatchSource::NearestNeighbor {
                         distance: *m.distance(),
-                    })
-                } else {
-                    None
-                },
+                    }),
             );
         }
         for m in iou_matches {
@@ -125,13 +121,9 @@ impl Tracker {
             track.update(
                 &self.kf,
                 detections.get(*m.detection_idx()).unwrap(),
-                if track.is_confirmed() {
                     Some(MatchSource::IoU {
                         distance: *m.distance(),
                     })
-                } else {
-                    None
-                },
             );
         }
         for unmatched_track in unmatched_tracks {
@@ -246,8 +238,7 @@ impl Tracker {
             features_unmatched_tracks
                 .iter()
                 .filter(|k| {
-                    let track = self.tracks.get(**k).unwrap();
-                    *track.time_since_update() == 0 || track.features().nrows() == 0
+                    *self.tracks.get(**k).unwrap().time_since_update() == 1
                 })
                 .map(|v| v.to_owned())
                 .collect::<Vec<usize>>(),
@@ -256,7 +247,7 @@ impl Tracker {
 
         let features_unmatched_tracks = features_unmatched_tracks
             .iter()
-            .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 0)
+            .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 1)
             .map(|v| v.to_owned())
             .collect::<Vec<usize>>();
 
@@ -324,7 +315,6 @@ mod tests {
     #[test]
     fn tracker() {
         let iterations: i32 = 100;
-        let log = true;
 
         // deterministic generator
         let mut rng = Pcg32::seed_from_u64(0);
@@ -351,9 +341,7 @@ mod tests {
         let mut tracker = Tracker::new(metric, None, None, None);
 
         for iteration in 0..iterations {
-            if log {
-                println!("\n{}", iteration)
-            };
+                println!("\n{}", iteration);
             // move up to right
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
@@ -430,10 +418,9 @@ mod tests {
             }
 
             // for debugging
-            if log {
                 for track in &tracker.tracks {
                     println!(
-                        "{}: {:?} {:?} {:?} {:?}",
+                        "{}: {:?} {:?} {:?} {:?} {:?}",
                         iteration,
                         track.track_id(),
                         track.state(),
@@ -443,9 +430,9 @@ mod tests {
                             .track_features(*track.track_id())
                             .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
                             .nrows(),
+                        track.match_source(),
                     );
                 }
-            }
         }
 
         let track = tracker
@@ -476,16 +463,13 @@ mod tests {
     #[test]
     fn tracker_no_features() {
         let iterations: i32 = 100;
-        let log = true;
 
         // deterministic generator
         let mut rng = Pcg32::seed_from_u64(0);
 
         // create random movement/scale this is a vectors so it can be easily copied to python for comparison
-        let mut movement_jitter = (0..8 * iterations)
-            .map(|_| next_f32(&mut rng))
-            .collect::<Vec<f32>>();
-        let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 8 * iterations);
+        let mut movement_jitter = (0..1000).map(|_| next_f32(&mut rng)).collect::<Vec<f32>>();
+        let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 1000);
 
         let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
         let mut tracker = Tracker::new(metric, None, None, None);
@@ -522,25 +506,23 @@ mod tests {
             );
 
             &tracker.predict();
-
             &tracker.update(&[d0, d1]);
 
             // for debugging
-            if log {
                 for track in &tracker.tracks {
                     println!(
-                        "{}: {:?} {:?} {:?} {:?}",
+                        "{}: {:?} {:?} {:?} {:?} {:?}",
                         iteration,
                         track.track_id(),
                         track.state(),
-                        track.bbox().to_tlbr(),
+                        track.bbox().to_tlwh(),
                         tracker
                             .metric
                             .track_features(*track.track_id())
                             .unwrap_or(&Array2::<f32>::zeros((0, *tracker.metric.feature_length())))
                             .nrows(),
+                        track.match_source(),
                     );
-                }
             }
         }
 
@@ -553,7 +535,7 @@ mod tests {
         assert!(track.is_confirmed());
         assert_eq!(
             track.bbox().to_tlwh(),
-            arr1::<f32>(&[99.2418, 99.21735, 9.979219, 9.984485])
+            arr1::<f32>(&[99.26583, 98.69391, 9.864473, 9.7438])
         );
 
         let track = tracker
@@ -565,7 +547,7 @@ mod tests {
         assert!(track.is_confirmed());
         assert_eq!(
             track.bbox().to_tlwh(),
-            arr1::<f32>(&[1.294354, 1.1528587, 8.003455, 8.0692625])
+            arr1::<f32>(&[0.9682312, 0.8316479, 8.2856045, 8.30345])
         );
     }
 }
