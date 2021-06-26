@@ -7,6 +7,8 @@ use ndarray::*;
 use pathfinding::kuhn_munkres::kuhn_munkres_min;
 use pathfinding::matrix::Matrix;
 
+// use munkres::{solve_assignment, WeightMatrix};
+
 #[derive(Debug, Clone)]
 pub struct Match {
     track_idx: usize,
@@ -95,13 +97,43 @@ pub fn min_cost_matching(
         )
         .mapv(|v| v.min(max_distance + 1e-5));
 
-        // scipy.optimize.linear_sum_assignment truncates rows to num columns:
+        // `kuhn_munkres_min` requires nrows() <= ncols() whereas scipy.optimize.linear_sum_assignment is able to process where nrows > ncols:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
-        let cost_matrix =
-            cost_matrix.slice(s![0..cost_matrix.nrows().min(cost_matrix.ncols()), ..]);
+        //
+        // to satisfy kuhn_munkres_min filter out any rows where the entire row only contains the max_distance + 1e-5 constant as these
+        // are no-op rows anyway
+        let mut filtered_cost_matrix = Array2::<f32>::zeros((0, cost_matrix.ncols()));
+        let (filtered_cost_matrix, filtered_indices) = if cost_matrix.nrows() > cost_matrix.ncols()
+        {
+            // find the row indexes of rows containing only the max_distance + 1e-5 constant
+            let filtered_indices = cost_matrix
+                .fold_axis(Axis(1), f32::MAX, |&accumulator, &value| {
+                    accumulator.min(value)
+                })
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| (**v - (max_distance + 1e-5)).abs() < 1e-5)
+                .map(|(i, _)| i)
+                .collect::<Vec<usize>>();
+
+            // filter out the rows for the 'filtered_indices' from the cost_matrix
+            cost_matrix
+                .rows()
+                .into_iter()
+                .enumerate()
+                .for_each(|(row_idx, row)| {
+                    if !filtered_indices.contains(&row_idx) {
+                        filtered_cost_matrix.push_row(row).unwrap();
+                    }
+                });
+
+            (&filtered_cost_matrix, filtered_indices)
+        } else {
+            (&cost_matrix, vec![])
+        };
 
         // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (f32 does not implement `std::cmp::Ord`)
-        let cost_vec = cost_matrix
+        let cost_vec = filtered_cost_matrix
             .mapv(|v| (v * 10_000_000_000.0) as i64)
             .iter()
             .cloned()
@@ -111,9 +143,17 @@ pub fn min_cost_matching(
         // this is equivalent to `scipy.optimize.linear_sum_assignment(maximise=False)` but where scipy returns two arrays
         // (row_ind and col_ind) `kuhn_munkres_min` returns just the col_ind array leaving row_ind (which is just a row index) to be
         // derived manually.
-        let matrix = Matrix::from_vec(cost_matrix.nrows(), cost_matrix.ncols(), cost_vec).unwrap();
+        let matrix = Matrix::from_vec(
+            filtered_cost_matrix.nrows(),
+            filtered_cost_matrix.ncols(),
+            cost_vec,
+        )
+        .unwrap();
         let (_, col_indices) = kuhn_munkres_min(&matrix);
-        let row_indices = (0..col_indices.len()).collect::<Vec<usize>>();
+        let row_indices = (0..col_indices.len() + filtered_indices.len())
+            .filter(|i| !filtered_indices.contains(i))
+            .collect::<Vec<usize>>();
+        assert_eq!(row_indices.len(), col_indices.len());
 
         let mut matches: Vec<Match> = vec![];
         let mut unmatched_tracks: Vec<usize> = vec![];
@@ -135,6 +175,7 @@ pub fn min_cost_matching(
                     unmatched_tracks.push(*track_idx);
                 };
             });
+
         row_indices
             .iter()
             .zip(col_indices.iter())
@@ -186,7 +227,6 @@ pub fn matching_cascade(
     detection_indices: Option<Vec<usize>>,
 ) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
     let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
-
     let unmatched_detections = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
 
     // filter for only detections with feature vectors
