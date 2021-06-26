@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 lazy_static = "1.4.0"
-ndarray = "0.15.3"
+ndarray = { version = "0.15.3", features = ["blas"] }
 ndarray-linalg = { features = ["intel-mkl-static"], git = "https://github.com/rust-ndarray/ndarray-linalg", branch = "master" }
 pathfinding = "2.1.5"
 

@@ -103,30 +103,30 @@ pub fn min_cost_matching(
         // to satisfy kuhn_munkres_min filter out any rows where the entire row only contains the max_distance + 1e-5 constant as these
         // are no-op rows anyway
         let mut filtered_cost_matrix = Array2::<f32>::zeros((0, cost_matrix.ncols()));
+        let mut filtered_indices: Vec<usize> = Vec::new();
         let (filtered_cost_matrix, filtered_indices) = if cost_matrix.nrows() > cost_matrix.ncols()
         {
-            // find the row indexes of rows containing only the max_distance + 1e-5 constant
-            let filtered_indices = cost_matrix
-                .fold_axis(Axis(1), f32::MAX, |&accumulator, &value| {
-                    accumulator.min(value)
-                })
-                .iter()
-                .enumerate()
-                .filter(|(_, v)| (**v - (max_distance + 1e-5)).abs() < 1e-5)
-                .map(|(i, _)| i)
-                .collect::<Vec<usize>>();
+            // collect the cost_matrix into a sequence of index, row, minimum value of the row
+            let mut indexed_cost_matrix = cost_matrix.rows().into_iter().enumerate().map(|(row_idx, row)| {
+                (row_idx, row, row.fold(f32::MAX, |accumulator, &value| accumulator.min(value)))
+            }).collect::<Vec<(usize, ArrayView1::<f32>, f32)>>();
 
-            // filter out the rows for the 'filtered_indices' from the cost_matrix
-            cost_matrix
-                .rows()
-                .into_iter()
-                .enumerate()
-                .for_each(|(row_idx, row)| {
-                    if !filtered_indices.contains(&row_idx) {
-                        filtered_cost_matrix.push_row(row).unwrap();
-                    }
-                });
+            // sort by the minimum value for the row so that the worst match value can be `pop`ed from the vec
+            indexed_cost_matrix.sort_unstable_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
 
+            // pop and disard the worst match rows until nrows == ncols keeping track of index
+            while indexed_cost_matrix.len() > cost_matrix.ncols() {
+                let (row_idx, _, _ ) = indexed_cost_matrix.pop().unwrap();
+                filtered_indices.push(row_idx);
+            };
+
+            // re-sort by the index
+            indexed_cost_matrix.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+
+            // push the remaining values into the matrix
+            indexed_cost_matrix.iter().for_each(|(_, row, _)| {
+                filtered_cost_matrix.push_row(*row).unwrap();
+            });
             (&filtered_cost_matrix, filtered_indices)
         } else {
             (&cost_matrix, vec![])
