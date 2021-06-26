@@ -100,25 +100,34 @@ pub fn min_cost_matching(
         // `kuhn_munkres_min` requires nrows() <= ncols() whereas scipy.optimize.linear_sum_assignment is able to process where nrows > ncols:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
         //
-        // to satisfy kuhn_munkres_min filter out any rows where the entire row only contains the max_distance + 1e-5 constant as these
+        // to satisfy kuhn_munkres_min sequentially filter out the row with the lowest minimum value per row until nrows() <= ncols()
         // are no-op rows anyway
         let mut filtered_cost_matrix = Array2::<f32>::zeros((0, cost_matrix.ncols()));
         let mut filtered_indices: Vec<usize> = Vec::new();
         let (filtered_cost_matrix, filtered_indices) = if cost_matrix.nrows() > cost_matrix.ncols()
         {
             // collect the cost_matrix into a sequence of index, row, minimum value of the row
-            let mut indexed_cost_matrix = cost_matrix.rows().into_iter().enumerate().map(|(row_idx, row)| {
-                (row_idx, row, row.fold(f32::MAX, |accumulator, &value| accumulator.min(value)))
-            }).collect::<Vec<(usize, ArrayView1::<f32>, f32)>>();
+            let mut indexed_cost_matrix = cost_matrix
+                .rows()
+                .into_iter()
+                .enumerate()
+                .map(|(row_idx, row)| {
+                    (
+                        row_idx,
+                        row,
+                        row.fold(f32::MAX, |accumulator, &value| accumulator.min(value)),
+                    )
+                })
+                .collect::<Vec<(usize, ArrayView1<f32>, f32)>>();
 
-            // sort by the minimum value for the row so that the worst match value can be `pop`ed from the vec
+            // sort by the minimum value for the row so that the worst match value is last can be `pop`ed from the vec
             indexed_cost_matrix.sort_unstable_by(|a, b| a.2.partial_cmp(&b.2).unwrap());
 
             // pop and disard the worst match rows until nrows == ncols keeping track of index
             while indexed_cost_matrix.len() > cost_matrix.ncols() {
-                let (row_idx, _, _ ) = indexed_cost_matrix.pop().unwrap();
+                let (row_idx, _, _) = indexed_cost_matrix.pop().unwrap();
                 filtered_indices.push(row_idx);
-            };
+            }
 
             // re-sort by the index
             indexed_cost_matrix.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -350,6 +359,7 @@ pub fn gate_cost_matrix(
 
 #[cfg(test)]
 mod tests {
+    use std::iter::FromIterator;
     use std::rc::Rc;
 
     use crate::*;
@@ -391,15 +401,31 @@ mod tests {
 
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
         let mut t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
-        *t0.time_since_update_mut() = 1;
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
         let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
         let t2 = Track::new(mean, covariance, 2, 1.0, None, 0, 30, None);
 
-        let d0 = Detection::new(BoundingBox::new(10.0, 10.0, 5.0, 5.0), 1.0, None, None);
-        let d1 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None);
-        let d2 = Detection::new(BoundingBox::new(0.5, 0.5, 5.0, 5.0), 1.0, None, None);
+        let d0 = Detection::new(
+            BoundingBox::new(10.0, 10.0, 5.0, 5.0),
+            1.0,
+            None,
+            Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
+        );
+        let d1 = Detection::new(
+            BoundingBox::new(0.0, 0.0, 5.0, 5.0),
+            1.0,
+            None,
+            Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
+        );
+        let d2 = Detection::new(
+            BoundingBox::new(0.5, 0.5, 5.0, 5.0),
+            1.0,
+            None,
+            Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
+        );
+
+        *t0.time_since_update_mut() = 1;
 
         let (matches, mut unmatched_tracks, mut unmatched_detections) =
             linear_assignment::matching_cascade(
