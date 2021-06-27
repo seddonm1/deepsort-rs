@@ -20,8 +20,8 @@ pub enum TrackState {
 /// - `IoU` means matched via intsection over union of KalmanFilter predicted location.
 #[derive(Clone, Debug)]
 pub enum MatchSource {
-    NearestNeighbor { distance: f32 },
-    IoU { distance: f32 },
+    NearestNeighbor { detection: Detection, distance: f32 },
+    IoU { detection: Detection, distance: f32 },
 }
 
 /// A single target track with state space `(x, y, a, h)` and associated velocities, where `(x, y)` is the center of the bounding box, `a` is the aspect ratio and `h` is the height.
@@ -35,7 +35,7 @@ pub struct Track {
     covariance: Array2<f32>,
     /// A unique track identifier.
     track_id: usize,
-    /// The source of the most recent match.
+    /// The latest matched detection source.
     match_source: Option<MatchSource>,
     /// A confidence score of the latest update.
     confidence: f32,

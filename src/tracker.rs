@@ -113,20 +113,24 @@ impl Tracker {
         // Update track set.
         for m in features_matches {
             let track = self.tracks.get_mut(*m.track_idx()).unwrap();
+            let detection = detections.get(*m.detection_idx()).unwrap();
             track.update(
                 &self.kf,
-                detections.get(*m.detection_idx()).unwrap(),
+                detection,
                 Some(MatchSource::NearestNeighbor {
+                    detection: detection.clone(),
                     distance: *m.distance(),
                 }),
             );
         }
         for m in iou_matches {
             let track = self.tracks.get_mut(*m.track_idx()).unwrap();
+            let detection = detections.get(*m.detection_idx()).unwrap();
             track.update(
                 &self.kf,
-                detections.get(*m.detection_idx()).unwrap(),
+                detection,
                 Some(MatchSource::IoU {
+                    detection: detection.clone(),
                     distance: *m.distance(),
                 }),
             );
