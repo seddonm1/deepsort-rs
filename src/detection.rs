@@ -10,6 +10,8 @@ pub struct Detection {
     confidence: f32,
     /// Optional class identifier.
     class_id: Option<usize>,
+    /// Optional class name
+    class_name: Option<String>,
     /// A feature vector that describes the object contained in this image.
     feature: Option<Array1<f32>>,
 }
@@ -27,12 +29,14 @@ impl Detection {
         bbox: BoundingBox,
         confidence: f32,
         class_id: Option<usize>,
+        class_name: Option<String>,
         feature: Option<Vec<f32>>,
     ) -> Detection {
         Detection {
             bbox,
             confidence,
             class_id,
+            class_name,
             feature: feature.map(Array1::from_vec),
         }
     }
@@ -47,9 +51,14 @@ impl Detection {
         &self.confidence
     }
 
-    /// Returns the class_id of the detection
+    /// Returns the class identifier of the detection
     pub fn class_id(&self) -> &Option<usize> {
         &self.class_id
+    }
+
+    /// Returns the class name of the detection
+    pub fn class_name(&self) -> &Option<String> {
+        &self.class_name
     }
 
     /// Returns the feature array of the detection

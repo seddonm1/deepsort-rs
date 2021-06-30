@@ -370,15 +370,45 @@ mod tests {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
-        let t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
+        let t0 = Track::new(
+            mean,
+            covariance,
+            0,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
-        let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
+        let t1 = Track::new(
+            mean,
+            covariance,
+            1,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
-        let t2 = Track::new(mean, covariance, 2, 1.0, None, 0, 30, None);
+        let t2 = Track::new(
+            mean,
+            covariance,
+            2,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
 
-        let d0 = Detection::new(BoundingBox::new(10.0, 10.0, 5.0, 5.0), 1.0, None, None);
-        let d1 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None);
-        let d2 = Detection::new(BoundingBox::new(0.5, 0.5, 5.0, 5.0), 1.0, None, None);
+        let d0 = Detection::new(
+            BoundingBox::new(10.0, 10.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d1 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None, None);
+        let d2 = Detection::new(BoundingBox::new(0.5, 0.5, 5.0, 5.0), 1.0, None, None, None);
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
@@ -400,15 +430,40 @@ mod tests {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
-        let mut t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
+        let mut t0 = Track::new(
+            mean,
+            covariance,
+            0,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
-        let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
+        let t1 = Track::new(
+            mean,
+            covariance,
+            1,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
-        let t2 = Track::new(mean, covariance, 2, 1.0, None, 0, 30, None);
+        let t2 = Track::new(
+            mean,
+            covariance,
+            2,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
 
         let d0 = Detection::new(
             BoundingBox::new(10.0, 10.0, 5.0, 5.0),
             1.0,
+            None,
             None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
@@ -416,11 +471,13 @@ mod tests {
             BoundingBox::new(0.0, 0.0, 5.0, 5.0),
             1.0,
             None,
+            None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
         let d2 = Detection::new(
             BoundingBox::new(0.5, 0.5, 5.0, 5.0),
             1.0,
+            None,
             None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
@@ -451,9 +508,23 @@ mod tests {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(4.0, 5.0, 6.0, 7.0));
-        let t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None, None);
-        let d1 = Detection::new(BoundingBox::new(20.0, 20.0, 5.0, 6.0), 1.0, None, None);
+        let t0 = Track::new(
+            mean,
+            covariance,
+            0,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
+        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None, None, None);
+        let d1 = Detection::new(
+            BoundingBox::new(20.0, 20.0, 5.0, 6.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
 
         let cost_matrix =
             iou_matching::iou_cost(&vec![t0.clone()], &vec![d0.clone(), d1.clone()], None, None);

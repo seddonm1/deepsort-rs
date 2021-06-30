@@ -224,7 +224,15 @@ fn make_detections() -> Vec<Vec<Detection>> {
         .map(|detections| {
             detections
                 .iter()
-                .map(|d| Detection::new(BoundingBox::new(d[0], d[1], d[2], d[3]), 1.0, None, None))
+                .map(|d| {
+                    Detection::new(
+                        BoundingBox::new(d[0], d[1], d[2], d[3]),
+                        1.0,
+                        None,
+                        None,
+                        None,
+                    )
+                })
                 .collect::<Vec<Detection>>()
         })
         .collect::<Vec<Vec<Detection>>>()

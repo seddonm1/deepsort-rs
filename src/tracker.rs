@@ -22,6 +22,7 @@ use ndarray::*;
 ///     BoundingBox::new(0.0, 0.0, 5.0, 5.0),
 ///     1.0,
 ///     None,
+///     None,
 ///     Some(vec![0.0; 128]),
 /// );
 ///
@@ -34,7 +35,7 @@ use ndarray::*;
 ///     println!(
 ///         "{} {} {:?} {:?}",
 ///         track.track_id(),
-///         track.confidence(),
+///         track.detection().confidence(),
 ///         track.state(),
 ///         track.bbox().to_tlwh(),
 ///     );
@@ -289,8 +290,7 @@ impl Tracker {
             mean,
             covariance,
             self.next_id,
-            *detection.confidence(),
-            *detection.class_id(),
+            detection,
             self.n_init,
             self.max_age,
             feature,
@@ -354,6 +354,7 @@ mod tests {
                 ),
                 1.0,
                 None,
+                None,
                 Some(d0_feat.clone()),
             );
 
@@ -368,6 +369,7 @@ mod tests {
                     8.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 None,
                 Some(d1_feat.clone()),
             );
@@ -384,6 +386,7 @@ mod tests {
                 ),
                 1.0,
                 None,
+                None,
                 Some(d2_feat.clone()),
             );
 
@@ -398,6 +401,7 @@ mod tests {
                     5.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 None,
                 Some(d3_feat.clone()),
             );
@@ -490,6 +494,7 @@ mod tests {
                 1.0,
                 None,
                 None,
+                None,
             );
 
             // move down to left
@@ -503,6 +508,7 @@ mod tests {
                     8.0 + scale_jitter.pop().unwrap(),
                 ),
                 1.0,
+                None,
                 None,
                 None,
             );
@@ -5074,6 +5080,7 @@ mod tests {
                             Detection::new(
                                 BoundingBox::new(d[0], d[1], d[2], d[3]),
                                 1.0,
+                                None,
                                 None,
                                 None,
                             )

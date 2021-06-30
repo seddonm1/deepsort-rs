@@ -37,10 +37,8 @@ pub struct Track {
     track_id: usize,
     /// The latest matched detection source.
     match_source: Option<MatchSource>,
-    /// A confidence score of the latest update.
-    confidence: f32,
-    /// An optional class identifier.
-    class_id: Option<usize>,
+    /// The last detection matched to this track
+    detection: Detection,
     /// Number of consecutive detections before the track is confirmed
     n_init: usize,
     /// The maximum number of consecutive misses before the track state is set to `Deleted`.
@@ -73,8 +71,7 @@ impl Track {
         mean: Array1<f32>,
         covariance: Array2<f32>,
         track_id: usize,
-        confidence: f32,
-        class_id: Option<usize>,
+        detection: Detection,
         n_init: usize,
         max_age: usize,
         feature: Option<Array2<f32>>,
@@ -85,8 +82,7 @@ impl Track {
             covariance,
             track_id,
             match_source: None,
-            confidence,
-            class_id,
+            detection,
             n_init,
             max_age,
             hits: 1,
@@ -101,14 +97,9 @@ impl Track {
         &self.track_id
     }
 
-    /// Return the confidence score of the latest update
-    pub fn confidence(&self) -> &f32 {
-        &self.confidence
-    }
-
-    /// Return the optional class identifier of the track
-    pub fn class_id(&self) -> &Option<usize> {
-        &self.class_id
+    /// Return the detection associated with the latest update
+    pub fn detection(&self) -> &Detection {
+        &self.detection
     }
 
     /// Return the TrackState of the track
@@ -191,8 +182,7 @@ impl Track {
         self.covariance = covariance;
 
         self.match_source = match_source;
-        self.confidence = *detection.confidence();
-        self.class_id = *detection.class_id();
+        self.detection = detection.clone();
 
         if let Some(feature) = detection.feature() {
             self.features.push_row(feature.view()).unwrap();
@@ -243,8 +233,7 @@ mod tests {
             array![1.0, 2.0, 3.0, 4.0],
             array![[]],
             0,
-            1.0,
-            None,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
             0,
             0,
             None,
@@ -258,8 +247,7 @@ mod tests {
             array![1.0, 2.0, 3.0, 4.0],
             array![[]],
             0,
-            1.0,
-            None,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
             0,
             0,
             None,
@@ -272,7 +260,15 @@ mod tests {
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
-        let mut track = Track::new(mean, covariance, 0, 1.0, None, 0, 0, None);
+        let mut track = Track::new(
+            mean,
+            covariance,
+            0,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            0,
+            None,
+        );
 
         track.predict(&kf);
 
@@ -375,12 +371,21 @@ mod tests {
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
-        let mut track = Track::new(mean, covariance, 0, 1.0, None, 0, 0, None);
+        let mut track = Track::new(
+            mean,
+            covariance,
+            0,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            0,
+            None,
+        );
         track.predict(&kf);
 
         let detection = Detection::new(
             BoundingBox::new(2.0, 3.0, 4.0, 5.0),
             1.0,
+            None,
             None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );

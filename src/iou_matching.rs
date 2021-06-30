@@ -121,18 +121,34 @@ mod tests {
     fn iou_cost() {
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
-        let t0 = Track::new(mean, covariance, 0, 1.0, None, 0, 30, None);
+        let t0 = Track::new(
+            mean,
+            covariance,
+            0,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
 
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(5.0, 5.0, 5.0, 5.0));
-        let t1 = Track::new(mean, covariance, 1, 1.0, None, 0, 30, None);
+        let t1 = Track::new(
+            mean,
+            covariance,
+            1,
+            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            0,
+            30,
+            None,
+        );
 
-        let d0 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 1.0, 5.0, 5.0), 1.0, None, None);
-        let d2 = Detection::new(BoundingBox::new(2.0, 2.0, 5.0, 5.0), 1.0, None, None);
-        let d3 = Detection::new(BoundingBox::new(3.0, 3.0, 5.0, 5.0), 1.0, None, None);
-        let d4 = Detection::new(BoundingBox::new(4.0, 4.0, 5.0, 5.0), 1.0, None, None);
-        let d5 = Detection::new(BoundingBox::new(5.0, 5.0, 5.0, 5.0), 1.0, None, None);
+        let d0 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None, None);
+        let d1 = Detection::new(BoundingBox::new(1.0, 1.0, 5.0, 5.0), 1.0, None, None, None);
+        let d2 = Detection::new(BoundingBox::new(2.0, 2.0, 5.0, 5.0), 1.0, None, None, None);
+        let d3 = Detection::new(BoundingBox::new(3.0, 3.0, 5.0, 5.0), 1.0, None, None, None);
+        let d4 = Detection::new(BoundingBox::new(4.0, 4.0, 5.0, 5.0), 1.0, None, None, None);
+        let d5 = Detection::new(BoundingBox::new(5.0, 5.0, 5.0, 5.0), 1.0, None, None, None);
 
         let cost_matrix =
             iou_matching::iou_cost(&vec![t0, t1], &vec![d0, d1, d2, d3, d4, d5], None, None);
