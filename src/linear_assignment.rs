@@ -343,7 +343,7 @@ pub fn gate_cost_matrix(
         .for_each(|(row, track_idx)| {
             let track = tracks.get(*track_idx).unwrap();
             let gating_distance =
-                kf.gating_distance(&track.mean(), &track.covariance(), &measurements);
+                kf.gating_distance(track.mean(), track.covariance(), &measurements);
             gating_distance
                 .iter()
                 .enumerate()

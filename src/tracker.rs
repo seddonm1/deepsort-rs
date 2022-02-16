@@ -237,7 +237,7 @@ impl Tracker {
                 *self.metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
-                &detections,
+                detections,
                 Some(confirmed_tracks),
                 None,
             );
@@ -281,7 +281,7 @@ impl Tracker {
     }
 
     fn initiate_track(&mut self, detection: Detection) {
-        let (mean, covariance) = self.kf.initiate(&detection.bbox());
+        let (mean, covariance) = self.kf.initiate(detection.bbox());
         let feature = detection
             .feature()
             .clone()
@@ -406,18 +406,18 @@ mod tests {
                 Some(d3_feat.clone()),
             );
 
-            &tracker.predict();
+            tracker.predict();
 
             // add and remove detections over the sequence
             match iteration {
                 _ if iteration >= 60 => {
-                    &tracker.update(&[d2, d3]);
+                    tracker.update(&[d2, d3]);
                 }
                 _ if iteration >= 30 => {
-                    &tracker.update(&[d0, d2]);
+                    tracker.update(&[d0, d2]);
                 }
                 _ => {
-                    &tracker.update(&[d0, d1]);
+                    tracker.update(&[d0, d1]);
                 }
             }
 
@@ -513,8 +513,8 @@ mod tests {
                 None,
             );
 
-            &tracker.predict();
-            &tracker.update(&[d0, d1]);
+            tracker.predict();
+            tracker.update(&[d0, d1]);
 
             // for debugging
             // for track in &tracker.tracks {
@@ -5072,8 +5072,8 @@ mod tests {
             .iter()
             .enumerate()
             .for_each(|(_iteration, detection)| {
-                &tracker.predict();
-                &tracker.update(
+                tracker.predict();
+                tracker.update(
                     &detection
                         .iter()
                         .map(|d| {
