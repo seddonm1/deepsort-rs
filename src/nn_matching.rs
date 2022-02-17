@@ -73,6 +73,7 @@ impl fmt::Debug for NearestNeighborDistanceMetric {
         f.debug_struct("NearestNeighborDistanceMetric")
             .field("matching_threshold", &self.matching_threshold)
             .field("budget", &self.budget)
+            .field("feature_length", &self.feature_length)
             .field("samples", &self.samples)
             .finish()
     }
