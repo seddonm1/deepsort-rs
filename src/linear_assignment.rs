@@ -369,7 +369,7 @@ mod tests {
     fn min_cost_matching() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
         let t0 = Track::new(
             mean,
             covariance,
@@ -379,7 +379,7 @@ mod tests {
             30,
             None,
         );
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
         let t1 = Track::new(
             mean,
             covariance,
@@ -389,7 +389,7 @@ mod tests {
             30,
             None,
         );
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
         let t2 = Track::new(
             mean,
             covariance,
@@ -429,7 +429,7 @@ mod tests {
     fn matching_cascade() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
         let mut t0 = Track::new(
             mean,
             covariance,
@@ -439,7 +439,7 @@ mod tests {
             30,
             None,
         );
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 1.0, 5.0, 5.0));
         let t1 = Track::new(
             mean,
             covariance,
@@ -449,7 +449,7 @@ mod tests {
             30,
             None,
         );
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(20.0, 20.0, 5.0, 5.0));
         let t2 = Track::new(
             mean,
             covariance,
@@ -507,7 +507,7 @@ mod tests {
     fn gate_cost_matrix() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(4.0, 5.0, 6.0, 7.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(4.0, 5.0, 6.0, 7.0));
         let t0 = Track::new(
             mean,
             covariance,

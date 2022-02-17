@@ -325,8 +325,8 @@ mod tests {
     fn predict() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
-        let (mean, covariance) = kf.clone().predict(&mean, &covariance);
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
+        let (mean, covariance) = kf.predict(&mean, &covariance);
 
         assert_eq!(
             mean,
@@ -369,8 +369,8 @@ mod tests {
     fn project() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
-        let (mean, covariance) = kf.clone().project(&mean, &covariance);
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
+        let (mean, covariance) = kf.project(&mean, &covariance);
 
         assert_eq!(mean, arr1::<f32>(&[1.0, 2.5, 0.6666667, 3.0]));
         assert_eq!(
@@ -388,11 +388,9 @@ mod tests {
     fn update() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
-        let (mean, covariance) = kf.clone().predict(&mean, &covariance);
-        let (mean, covariance) =
-            kf.clone()
-                .update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
+        let (mean, covariance) = kf.predict(&mean, &covariance);
+        let (mean, covariance) = kf.update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
 
         assert_eq!(
             mean,
@@ -444,8 +442,8 @@ mod tests {
     fn gating_distance() {
         let kf = KalmanFilter::new();
 
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
-        let (mean, covariance) = kf.clone().predict(&mean, &covariance);
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
+        let (mean, covariance) = kf.predict(&mean, &covariance);
         let squared_maha = kf.gating_distance(
             &mean,
             &covariance,

@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn iou_cost() {
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
         let t0 = Track::new(
             mean,
             covariance,
@@ -132,7 +132,7 @@ mod tests {
         );
 
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(5.0, 5.0, 5.0, 5.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(5.0, 5.0, 5.0, 5.0));
         let t1 = Track::new(
             mean,
             covariance,

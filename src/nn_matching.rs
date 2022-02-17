@@ -209,7 +209,7 @@ mod tests {
     #[test]
     fn partial_fit() {
         let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-        metric.partial_fit(&array![[]], &vec![], &vec![]);
+        metric.partial_fit(&array![[]], &[], &[]);
 
         metric.partial_fit(
             &stack![
@@ -217,8 +217,8 @@ mod tests {
                 Array::range(0.0, 128.0, 1.0),
                 Array::range(0.0, 128.0, 1.0)
             ],
-            &vec![0, 1],
-            &vec![0, 1],
+            &[0, 1],
+            &[0, 1],
         );
         assert_eq!(
             metric.samples.get(&0).unwrap(),
@@ -231,8 +231,8 @@ mod tests {
 
         metric.partial_fit(
             &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
-            &vec![0],
-            &vec![0, 1],
+            &[0],
+            &[0, 1],
         );
         assert_eq!(
             metric.samples.get(&0).unwrap(),
@@ -247,11 +247,7 @@ mod tests {
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
         );
 
-        metric.partial_fit(
-            &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
-            &vec![1],
-            &vec![1],
-        );
+        metric.partial_fit(&stack![Axis(0), Array::range(1.0, 129.0, 1.0)], &[1], &[1]);
         assert_eq!(metric.samples.get(&0), None);
         assert_eq!(
             metric.samples.get(&1).unwrap(),
@@ -283,8 +279,8 @@ mod tests {
                 Array::range(0.0, 128.0, 1.0),
                 Array::range(1.0, 129.0, 1.0)
             ],
-            &vec![0, 1],
-            &vec![0, 1],
+            &[0, 1],
+            &[0, 1],
         );
 
         let distances = metric.distance(
@@ -293,8 +289,8 @@ mod tests {
                 Array::range(0.1, 128.1, 1.0),
                 Array::range(1.1, 129.1, 1.0)
             ],
-            &vec![0, 1],
-            &vec![0, 1],
+            &[0, 1],
+            &[0, 1],
         );
 
         assert_eq!(

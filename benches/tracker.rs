@@ -249,7 +249,7 @@ fn criterion_benchmark(c: &mut Criterion) {
         for i in 0..10 {
             let step_detections = detections.get(i).unwrap();
             tracker.predict();
-            tracker.update(&step_detections);
+            tracker.update(step_detections);
         }
         let bench_detections = detections.get(10).unwrap();
 

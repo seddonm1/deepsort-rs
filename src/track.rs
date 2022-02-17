@@ -258,7 +258,7 @@ mod tests {
     #[test]
     fn predict() {
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
         let mut track = Track::new(
             mean,
@@ -369,7 +369,7 @@ mod tests {
     #[test]
     fn update() {
         let kf = KalmanFilter::new();
-        let (mean, covariance) = kf.clone().initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
+        let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
         let mut track = Track::new(
             mean,
