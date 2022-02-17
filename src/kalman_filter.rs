@@ -266,6 +266,7 @@ impl KalmanFilter {
 #[cfg(test)]
 mod tests {
     use crate::{BoundingBox, KalmanFilter};
+    use assert_approx_eq::assert_approx_eq;
     use ndarray::*;
 
     #[test]
@@ -454,6 +455,7 @@ mod tests {
             ],
         );
 
-        assert_eq!(squared_maha, arr1(&[18.426916, 73.4081]));
+        assert_approx_eq!(squared_maha[0], 18.426916, 1e-4);
+        assert_approx_eq!(squared_maha[1], 73.4081, 1e-4);
     }
 }
