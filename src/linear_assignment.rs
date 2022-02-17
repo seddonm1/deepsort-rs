@@ -211,7 +211,7 @@ pub fn min_cost_matching(
 ///
 /// - `distance_metric`: The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices. The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection indices.
 /// - `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
-/// - `cascade_depth`: The cascade depth, should be se to the maximum track age.
+/// - `cascade_depth`: The cascade depth, should be set to the maximum track age.
 /// - `tracks`: A list of predicted tracks at the current time step.
 /// - `detections`: A list of detections at the current time step.
 /// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above). Defaults to all tracks.
