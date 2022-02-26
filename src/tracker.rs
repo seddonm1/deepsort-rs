@@ -18,7 +18,7 @@ type EnumeratedTrack<'a> = (usize, &'a Track);
 /// let mut tracker = Tracker::default();
 ///
 /// // create a detection
-/// // feature would be the feature vector from the cosine metric learning model output
+/// // feature vector from a metric learning model output
 /// let detection = Detection::new(
 ///     BoundingBox::new(0.0, 0.0, 5.0, 5.0),
 ///     1.0,
@@ -120,27 +120,27 @@ impl Tracker {
             self.matching_cascade(detections);
 
         // Update track set.
-        for m in features_matches {
-            let detection = detections.get(m.detection_idx()).unwrap();
-            let track = self.tracks.get_mut(m.track_idx()).unwrap();
+        for feature_match in features_matches {
+            let detection = detections.get(feature_match.detection_idx()).unwrap();
+            let track = self.tracks.get_mut(feature_match.track_idx()).unwrap();
             track.update(
                 &self.kf,
                 detection,
                 Some(MatchSource::NearestNeighbor {
                     detection: detection.clone(),
-                    distance: m.distance(),
+                    distance: feature_match.distance(),
                 }),
             );
         }
-        for m in iou_matches {
-            let detection = detections.get(m.detection_idx()).unwrap();
-            let track = self.tracks.get_mut(m.track_idx()).unwrap();
+        for iou_match in iou_matches {
+            let detection = detections.get(iou_match.detection_idx()).unwrap();
+            let track = self.tracks.get_mut(iou_match.track_idx()).unwrap();
             track.update(
                 &self.kf,
                 detection,
                 Some(MatchSource::IoU {
                     detection: detection.clone(),
-                    distance: m.distance(),
+                    distance: iou_match.distance(),
                 }),
             );
         }
@@ -162,7 +162,7 @@ impl Tracker {
             .collect();
 
         // For any confirmed tracks 'partial_fit' the features into the metric.samples hashmap and remove from track
-        let feature_length = *self.nn_metric.feature_length();
+        let feature_length = self.nn_metric.feature_length();
         let mut features = Array2::<f32>::zeros((0, feature_length));
         let mut targets: Vec<usize> = vec![];
         self.tracks
@@ -189,17 +189,12 @@ impl Tracker {
         &self,
         detections: &[Detection],
     ) -> (Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>) {
-        let nn_metric = self.nn_metric.clone();
-        let kf = self.kf.clone();
-        let feature_length = *self.nn_metric.feature_length();
-
         // Split track set into confirmed and unconfirmed tracks.
         let (confirmed_tracks, unconfirmed_tracks): (Vec<EnumeratedTrack>, Vec<EnumeratedTrack>) =
             self.tracks
                 .iter()
                 .enumerate()
                 .partition(|(_, track)| track.is_confirmed());
-
         let confirmed_tracks = confirmed_tracks
             .into_iter()
             .map(|(i, _)| i)
@@ -209,46 +204,11 @@ impl Tracker {
             .map(|(i, _)| i)
             .collect::<Vec<_>>();
 
-        let gated_metric = Rc::new(
-            move |tracks: &[Track],
-                  detections: &[Detection],
-                  track_indices: Option<Vec<usize>>,
-                  detection_indices: Option<Vec<usize>>|
-                  -> Array2<f32> {
-                let detection_indices = detection_indices.unwrap();
-                let track_indices = track_indices.unwrap();
-
-                let mut features = Array2::<f32>::zeros((0, feature_length));
-                detection_indices.iter().for_each(|i| {
-                    if let Some(feature) = detections.get(*i).unwrap().feature() {
-                        features.push_row(feature.view()).unwrap()
-                    }
-                });
-                let targets = track_indices
-                    .iter()
-                    .map(|i| tracks.get(*i).unwrap().track_id())
-                    .collect::<Vec<usize>>();
-
-                let cost_matrix = nn_metric.distance(&features, &detection_indices, &targets);
-
-                linear_assignment::gate_cost_matrix(
-                    kf.clone(),
-                    cost_matrix,
-                    tracks,
-                    detections,
-                    track_indices,
-                    detection_indices,
-                    None,
-                    None,
-                )
-            },
-        );
-
-        // Associate confirmed tracks using appearance features.
+        // Associate only confirmed tracks using appearance features.
         let (features_matches, features_unmatched_tracks, unmatched_detections) =
             linear_assignment::matching_cascade(
-                gated_metric,
-                *self.nn_metric.matching_threshold(),
+                self.nn_metric.gated_metric(self.kf.clone()),
+                self.nn_metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
                 detections,
@@ -264,7 +224,7 @@ impl Tracker {
             .into_iter()
             .partition(|k| self.tracks.get(*k).unwrap().time_since_update() == 1);
 
-        // Associate remaining tracks together with unconfirmed tracks using IOU.
+        // Associate recent tracks together with unconfirmed tracks using IOU.
         let iou_track_candidates = [unconfirmed_tracks, features_unmatched_tracks_recent].concat();
         let (iou_matches, iou_unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(

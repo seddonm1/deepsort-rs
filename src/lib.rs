@@ -13,7 +13,7 @@ mod tracker;
 pub use bounding_box::BoundingBox;
 pub use detection::Detection;
 pub use kalman_filter::KalmanFilter;
-pub use linear_assignment::Match;
+pub use linear_assignment::{DistanceMetricFn, Match};
 pub use nn_matching::{Metric, NearestNeighborDistanceMetric};
 pub use track::{MatchSource, Track};
 pub use tracker::Tracker;

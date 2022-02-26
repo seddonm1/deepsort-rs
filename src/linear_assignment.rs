@@ -1,13 +1,12 @@
-use std::collections::HashSet;
-use std::rc::Rc;
-
 use crate::*;
-
 use ndarray::*;
 use pathfinding::kuhn_munkres::kuhn_munkres_min;
 use pathfinding::matrix::Matrix;
+use std::collections::HashSet;
+use std::rc::Rc;
 
-// use munkres::{solve_assignment, WeightMatrix};
+pub type DistanceMetricFn =
+    Rc<dyn Fn(&[Track], &[Detection], Option<Vec<usize>>, Option<Vec<usize>>) -> Array2<f32>>;
 
 #[derive(Debug, Clone)]
 pub struct Match {
@@ -74,9 +73,7 @@ impl PartialEq for Match {
 /// - A list of unmatched detection indices.
 #[allow(clippy::type_complexity)]
 pub fn min_cost_matching(
-    distance_metric: Rc<
-        dyn Fn(&[Track], &[Detection], Option<Vec<usize>>, Option<Vec<usize>>) -> Array2<f32>,
-    >,
+    distance_metric: DistanceMetricFn,
     max_distance: f32,
     tracks: &[Track],
     detections: &[Detection],
@@ -224,9 +221,7 @@ pub fn min_cost_matching(
 /// - A list of unmatched detection indices.
 #[allow(clippy::type_complexity)]
 pub fn matching_cascade(
-    distance_metric: Rc<
-        dyn Fn(&[Track], &[Detection], Option<Vec<usize>>, Option<Vec<usize>>) -> Array2<f32>,
-    >,
+    distance_metric: DistanceMetricFn,
     max_distance: f32,
     cascade_depth: usize,
     tracks: &[Track],

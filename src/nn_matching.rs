@@ -1,8 +1,9 @@
-use std::fmt;
-
+use crate::{linear_assignment, Detection, DistanceMetricFn, KalmanFilter, Track};
 use ndarray::*;
 use ndarray_linalg::*;
 use std::collections::HashMap;
+use std::fmt;
+use std::rc::Rc;
 
 const FEATURE_LENGTH: usize = 128;
 
@@ -117,13 +118,13 @@ impl NearestNeighborDistanceMetric {
     }
 
     /// Return the matching threshold
-    pub fn matching_threshold(&self) -> &f32 {
-        &self.matching_threshold
+    pub fn matching_threshold(&self) -> f32 {
+        self.matching_threshold
     }
 
     /// Return the feature length
-    pub fn feature_length(&self) -> &usize {
-        &self.feature_length
+    pub fn feature_length(&self) -> usize {
+        self.feature_length
     }
 
     /// Return the stored feature vectors for a given track identifier
@@ -196,6 +197,53 @@ impl NearestNeighborDistanceMetric {
             };
         });
         cost_matrix
+    }
+
+    /// Create the gated metric function required by the matching cascade
+    ///
+    /// # Parameters
+    ///
+    /// - `kf`: The Kalman filter.
+    ///
+    /// # Returns
+    ///
+    /// A function that calculates the distance between the incoming detection features and track existing feature vector
+    pub fn gated_metric(&self, kf: KalmanFilter) -> DistanceMetricFn {
+        let nn_metric = self.clone();
+        Rc::new(
+            move |tracks: &[Track],
+                  detections: &[Detection],
+                  track_indices: Option<Vec<usize>>,
+                  detection_indices: Option<Vec<usize>>|
+                  -> Array2<f32> {
+                let detection_indices = detection_indices.unwrap();
+                let track_indices = track_indices.unwrap();
+
+                let mut features = Array2::<f32>::zeros((0, nn_metric.feature_length));
+                detection_indices.iter().for_each(|i| {
+                    if let Some(feature) = detections.get(*i).unwrap().feature() {
+                        features.push_row(feature.view()).unwrap()
+                    }
+                });
+                let targets = track_indices
+                    .iter()
+                    .map(|i| tracks.get(*i).unwrap().track_id())
+                    .collect::<Vec<usize>>();
+
+                let cost_matrix = nn_metric.distance(&features, &detection_indices, &targets);
+
+                linear_assignment::gate_cost_matrix(
+                    kf.clone(),
+                    cost_matrix,
+                    tracks,
+                    detections,
+                    track_indices,
+                    detection_indices,
+                    None,
+                    None,
+                )
+            },
+        )
     }
 }
 
