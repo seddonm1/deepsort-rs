@@ -104,8 +104,9 @@ impl Tracker {
 
     /// Propagate track state distributions one time step forward. This function should be called once every time step, before `update`.
     pub fn predict(&mut self) {
-        let kf = self.kf.clone();
-        self.tracks.iter_mut().for_each(|track| track.predict(&kf));
+        self.tracks
+            .iter_mut()
+            .for_each(|track| track.predict(&self.kf));
     }
 
     /// Perform measurement update and track management.
@@ -116,7 +117,7 @@ impl Tracker {
     pub fn update(&mut self, detections: &[Detection]) {
         // Run matching cascade.
         let (features_matches, iou_matches, unmatched_tracks, unmatched_detections) =
-            self.match_impl(detections);
+            self.matching_cascade(detections);
 
         // Update track set.
         for m in features_matches {
@@ -176,51 +177,21 @@ impl Tracker {
             });
 
         self.nn_metric
-            .partial_fit(&features, &targets, &active_targets)
+            .partial_fit(&features, &targets, &active_targets);
     }
 
-    fn match_impl(
+    /// The matching cascade.
+    ///
+    /// It works in two stages:
+    /// - first run the nn_metric matching to try to associate matches using the feature vector
+    /// - with the remaining tracks attempt to match using iou
+    fn matching_cascade(
         &self,
         detections: &[Detection],
     ) -> (Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>) {
-        let metric = self.nn_metric.clone();
+        let nn_metric = self.nn_metric.clone();
         let kf = self.kf.clone();
         let feature_length = *self.nn_metric.feature_length();
-
-        let gated_metric = Rc::new(
-            move |tracks: &[Track],
-                  dets: &[Detection],
-                  track_indices: Option<Vec<usize>>,
-                  detection_indices: Option<Vec<usize>>|
-                  -> Array2<f32> {
-                let detection_indices = detection_indices.unwrap();
-                let track_indices = track_indices.unwrap();
-
-                let mut features = Array2::<f32>::zeros((0, feature_length));
-                detection_indices.iter().for_each(|i| {
-                    if let Some(feature) = dets.get(*i).unwrap().feature() {
-                        features.push_row(feature.view()).unwrap()
-                    }
-                });
-                let targets = track_indices
-                    .iter()
-                    .map(|i| tracks.get(*i).unwrap().track_id())
-                    .collect::<Vec<usize>>();
-
-                let cost_matrix = metric.distance(&features, &detection_indices, &targets);
-
-                linear_assignment::gate_cost_matrix(
-                    kf.clone(),
-                    cost_matrix,
-                    tracks,
-                    dets,
-                    track_indices,
-                    detection_indices,
-                    None,
-                    None,
-                )
-            },
-        );
 
         // Split track set into confirmed and unconfirmed tracks.
         let (confirmed_tracks, unconfirmed_tracks): (Vec<EnumeratedTrack>, Vec<EnumeratedTrack>) =
@@ -238,6 +209,41 @@ impl Tracker {
             .map(|(i, _)| i)
             .collect::<Vec<_>>();
 
+        let gated_metric = Rc::new(
+            move |tracks: &[Track],
+                  detections: &[Detection],
+                  track_indices: Option<Vec<usize>>,
+                  detection_indices: Option<Vec<usize>>|
+                  -> Array2<f32> {
+                let detection_indices = detection_indices.unwrap();
+                let track_indices = track_indices.unwrap();
+
+                let mut features = Array2::<f32>::zeros((0, feature_length));
+                detection_indices.iter().for_each(|i| {
+                    if let Some(feature) = detections.get(*i).unwrap().feature() {
+                        features.push_row(feature.view()).unwrap()
+                    }
+                });
+                let targets = track_indices
+                    .iter()
+                    .map(|i| tracks.get(*i).unwrap().track_id())
+                    .collect::<Vec<usize>>();
+
+                let cost_matrix = nn_metric.distance(&features, &detection_indices, &targets);
+
+                linear_assignment::gate_cost_matrix(
+                    kf.clone(),
+                    cost_matrix,
+                    tracks,
+                    detections,
+                    track_indices,
+                    detection_indices,
+                    None,
+                    None,
+                )
+            },
+        );
+
         // Associate confirmed tracks using appearance features.
         let (features_matches, features_unmatched_tracks, unmatched_detections) =
             linear_assignment::matching_cascade(
@@ -250,25 +256,16 @@ impl Tracker {
                 None,
             );
 
+        // partition the unmatched tracks into recent (time_since_update == 1) and older
+        let (features_unmatched_tracks_recent, features_unmatched_tracks): (
+            Vec<usize>,
+            Vec<usize>,
+        ) = features_unmatched_tracks
+            .into_iter()
+            .partition(|k| self.tracks.get(*k).unwrap().time_since_update() == 1);
+
         // Associate remaining tracks together with unconfirmed tracks using IOU.
-        let iou_track_candidates = [
-            unconfirmed_tracks,
-            features_unmatched_tracks
-                .iter()
-                .filter_map(|k| {
-                    (self.tracks.get(*k).unwrap().time_since_update() == 1).then(|| k.to_owned())
-                })
-                .collect::<Vec<_>>(),
-        ]
-        .concat();
-
-        let features_unmatched_tracks = features_unmatched_tracks
-            .iter()
-            .filter_map(|k| {
-                (self.tracks.get(*k).unwrap().time_since_update() != 1).then(|| k.to_owned())
-            })
-            .collect::<Vec<_>>();
-
+        let iou_track_candidates = [unconfirmed_tracks, features_unmatched_tracks_recent].concat();
         let (iou_matches, iou_unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
                 Rc::new(iou_matching::iou_cost),
