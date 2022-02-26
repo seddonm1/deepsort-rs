@@ -8,7 +8,7 @@ edition = "2021"
 lazy_static = "1.4.0"
 ndarray = { version = "0.15.4", features = ["blas"] }
 ndarray-linalg = { version = "0.14.1", features = ["intel-mkl-static"] }
-pathfinding = "3.0.9"
+pathfinding = "3.0.10"
 
 # these overrides are needed until https://github.com/rust-math/intel-mkl-src/pull/70 is merged
 [patch.crates-io]
@@ -16,7 +16,7 @@ intel-mkl-src = { path = "./vendor/intel-mkl-src/intel-mkl-src" }
 intel-mkl-tool = { path = "./vendor/intel-mkl-src/intel-mkl-tool" }
 
 [dev-dependencies]
-rand = "0.8.4"
+rand = "0.8.5"
 rand_distr = "0.4.3"
 rand_pcg = "0.3.1"
 criterion = "0.3.5"
