@@ -33,18 +33,18 @@ impl Match {
     }
 
     /// Return the track identifier of the match
-    pub fn track_idx(&self) -> &usize {
-        &self.track_idx
+    pub fn track_idx(&self) -> usize {
+        self.track_idx
     }
 
     /// Return the detection identifier of the match
-    pub fn detection_idx(&self) -> &usize {
-        &self.detection_idx
+    pub fn detection_idx(&self) -> usize {
+        self.detection_idx
     }
 
     /// Return the distance of the match
-    pub fn distance(&self) -> &f32 {
-        &self.distance
+    pub fn distance(&self) -> f32 {
+        self.distance
     }
 }
 
@@ -144,9 +144,8 @@ pub fn min_cost_matching(
         // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (f32 does not implement `std::cmp::Ord`)
         let cost_vec = filtered_cost_matrix
             .mapv(|v| (v * 10_000_000_000.0) as i64)
-            .iter()
-            .cloned()
-            .collect::<Vec<i64>>();
+            .into_iter()
+            .collect::<Vec<_>>();
 
         // invoke the kuhn munkres min (aka hungarian) assignment algorithm
         // this is equivalent to `scipy.optimize.linear_sum_assignment(maximise=False)` but where scipy returns two arrays
@@ -161,7 +160,7 @@ pub fn min_cost_matching(
         let (_, col_indices) = kuhn_munkres_min(&matrix);
         let row_indices = (0..col_indices.len() + filtered_indices.len())
             .filter(|i| !filtered_indices.contains(i))
-            .collect::<Vec<usize>>();
+            .collect::<Vec<_>>();
         assert_eq!(row_indices.len(), col_indices.len());
 
         let mut matches: Vec<Match> = vec![];
@@ -243,14 +242,13 @@ pub fn matching_cascade(
         .iter()
         .filter(|detection_idx| detections.get(**detection_idx).unwrap().feature().is_none())
         .cloned()
-        .collect::<Vec<usize>>();
+        .collect::<Vec<_>>();
 
     // filter for only detections with feature vectors
     let mut unmatched_detections = unmatched_detections
-        .iter()
-        .filter(|detection_idx| detections.get(**detection_idx).unwrap().feature().is_some())
-        .cloned()
-        .collect::<Vec<usize>>();
+        .into_iter()
+        .filter(|detection_idx| detections.get(*detection_idx).unwrap().feature().is_some())
+        .collect::<Vec<_>>();
 
     let mut matches: Vec<Match> = vec![];
 
@@ -260,37 +258,36 @@ pub fn matching_cascade(
             break;
         }
 
-        let track_indices_l = track_indices
+        let level_track_indices = track_indices
             .iter()
-            .filter(|track_idx| *tracks.get(**track_idx).unwrap().time_since_update() == 1 + level)
+            .filter(|track_idx| tracks.get(**track_idx).unwrap().time_since_update() == 1 + level)
             .cloned()
-            .collect::<Vec<usize>>();
-        if track_indices_l.is_empty() {
+            .collect::<Vec<_>>();
+
+        if level_track_indices.is_empty() {
             // nothing to match at this level
             continue;
         }
 
-        let (matches_l, _, unmatched_detections_l) = min_cost_matching(
+        let (level_matches, _, level_unmatched_detections) = min_cost_matching(
             distance_metric.clone(),
             max_distance,
             tracks,
             detections,
-            Some(track_indices_l),
+            Some(level_track_indices),
             Some(unmatched_detections.to_owned()),
         );
-        matches.extend_from_slice(&matches_l);
-        unmatched_detections = unmatched_detections_l;
+        matches.extend_from_slice(&level_matches);
+        unmatched_detections = level_unmatched_detections;
     }
 
+    let match_indices = matches.iter().map(|m| m.track_idx).collect::<HashSet<_>>();
     let unmatched_tracks = track_indices
-        .iter()
-        .cloned()
+        .into_iter()
         .collect::<HashSet<_>>()
-        .difference(&matches.iter().map(|m| m.track_idx).collect::<HashSet<_>>())
-        .collect::<Vec<&usize>>()
-        .iter()
-        .map(|v| *v.to_owned())
-        .collect::<Vec<usize>>();
+        .difference(&match_indices)
+        .cloned()
+        .collect::<Vec<_>>();
 
     (
         matches,

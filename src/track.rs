@@ -93,8 +93,8 @@ impl Track {
     }
 
     /// Return the identifier of the track
-    pub fn track_id(&self) -> &usize {
-        &self.track_id
+    pub fn track_id(&self) -> usize {
+        self.track_id
     }
 
     /// Return the detection associated with the latest update
@@ -113,8 +113,8 @@ impl Track {
     }
 
     /// Return the time since update of the track
-    pub fn time_since_update(&self) -> &usize {
-        &self.time_since_update
+    pub fn time_since_update(&self) -> usize {
+        self.time_since_update
     }
 
     /// Return the mutable time since update of the track

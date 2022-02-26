@@ -41,23 +41,28 @@ impl BoundingBox {
     }
 
     /// Returns the x of the bounding box
-    pub fn x(&self) -> &f32 {
-        &self.x
+    pub fn x(&self) -> f32 {
+        self.x
     }
 
     /// Returns the y of the bounding box
-    pub fn y(&self) -> &f32 {
-        &self.y
+    pub fn y(&self) -> f32 {
+        self.y
     }
 
     /// Returns the width of the bounding box
-    pub fn width(&self) -> &f32 {
-        &self.width
+    pub fn width(&self) -> f32 {
+        self.width
     }
 
     /// Returns the height of the bounding box
-    pub fn height(&self) -> &f32 {
-        &self.height
+    pub fn height(&self) -> f32 {
+        self.height
+    }
+
+    /// Returns the area of the bounding box
+    pub fn area(&self) -> f32 {
+        self.width * self.height
     }
 
     /// Returns the bounding box in left, top, width, height format, i.e., `(min x, min y, width, height)`.

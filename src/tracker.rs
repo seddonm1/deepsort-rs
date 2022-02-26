@@ -4,6 +4,8 @@ use crate::*;
 
 use ndarray::*;
 
+type EnumeratedTrack<'a> = (usize, &'a Track);
+
 /// This is the multi-target tracker.
 ///
 ///
@@ -13,8 +15,7 @@ use ndarray::*;
 /// use deepsort_rs::{BoundingBox, Detection, Metric, NearestNeighborDistanceMetric, Tracker};
 ///
 /// // instantiate tracker with default parameters
-/// let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-/// let mut tracker = Tracker::new(metric, None, None, None);
+/// let mut tracker = Tracker::default();
 ///
 /// // create a detection
 /// // feature would be the feature vector from the cosine metric learning model output
@@ -44,7 +45,7 @@ use ndarray::*;
 #[derive(Debug)]
 pub struct Tracker {
     /// The distance metric used for measurement to track association.
-    metric: NearestNeighborDistanceMetric,
+    nn_metric: NearestNeighborDistanceMetric,
     /// Gating threshold for intersection over union. Associations with cost larger than this value are disregarded.
     max_iou_distance: f32,
     /// Maximum number of missed misses before a track is deleted.
@@ -59,27 +60,33 @@ pub struct Tracker {
     next_id: usize,
 }
 
+impl Default for Tracker {
+    fn default() -> Self {
+        Self::new(NearestNeighborDistanceMetric::default(), None, None, None)
+    }
+}
+
 impl Tracker {
     /// Returns a new Tracker
     ///
     /// # Parameters
     ///
-    /// - `metric`: A distance metric for measurement-to-track association.
+    /// - `nn_metric`: A distance metric for measurement-to-track association.
     /// - `max_iou_distance`: Gating threshold for intersection over union. Associations with cost larger than this value are disregarded. Default `0.7`.
     /// - `max_age`: Maximum number of missed misses before a track is deleted. Default `30`.
     /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames. Default `3`.
     pub fn new(
-        metric: NearestNeighborDistanceMetric,
+        nn_metric: NearestNeighborDistanceMetric,
         max_iou_distance: Option<f32>,
         max_age: Option<usize>,
         n_init: Option<usize>,
     ) -> Tracker {
         Tracker {
-            metric,
+            nn_metric,
             max_iou_distance: max_iou_distance.unwrap_or(0.7),
             max_age: max_age.unwrap_or(30),
             n_init: n_init.unwrap_or(3),
-            kf: KalmanFilter::new(),
+            kf: KalmanFilter::default(),
             tracks: vec![],
             next_id: 1,
         }
@@ -90,9 +97,9 @@ impl Tracker {
         &self.tracks
     }
 
-    /// Return the metric
-    pub fn metric(&self) -> &NearestNeighborDistanceMetric {
-        &self.metric
+    /// Return the nn_metric
+    pub fn nn_metric(&self) -> &NearestNeighborDistanceMetric {
+        &self.nn_metric
     }
 
     /// Propagate track state distributions one time step forward. This function should be called once every time step, before `update`.
@@ -113,26 +120,26 @@ impl Tracker {
 
         // Update track set.
         for m in features_matches {
-            let track = self.tracks.get_mut(*m.track_idx()).unwrap();
-            let detection = detections.get(*m.detection_idx()).unwrap();
+            let detection = detections.get(m.detection_idx()).unwrap();
+            let track = self.tracks.get_mut(m.track_idx()).unwrap();
             track.update(
                 &self.kf,
                 detection,
                 Some(MatchSource::NearestNeighbor {
                     detection: detection.clone(),
-                    distance: *m.distance(),
+                    distance: m.distance(),
                 }),
             );
         }
         for m in iou_matches {
-            let track = self.tracks.get_mut(*m.track_idx()).unwrap();
-            let detection = detections.get(*m.detection_idx()).unwrap();
+            let detection = detections.get(m.detection_idx()).unwrap();
+            let track = self.tracks.get_mut(m.track_idx()).unwrap();
             track.update(
                 &self.kf,
                 detection,
                 Some(MatchSource::IoU {
                     detection: detection.clone(),
-                    distance: *m.distance(),
+                    distance: m.distance(),
                 }),
             );
         }
@@ -142,18 +149,19 @@ impl Tracker {
         for detection_idx in unmatched_detections {
             self.initiate_track(detections.get(detection_idx).unwrap().to_owned());
         }
+
+        // remove deleted tracks
         self.tracks.retain(|track| !track.is_deleted());
 
         // Update distance metric.
         let active_targets: Vec<usize> = self
             .tracks
             .iter()
-            .filter(|track| track.is_confirmed())
-            .map(|track| *track.track_id())
+            .filter_map(|track| track.is_confirmed().then(|| track.track_id()))
             .collect();
 
         // For any confirmed tracks 'partial_fit' the features into the metric.samples hashmap and remove from track
-        let feature_length = *self.metric.feature_length();
+        let feature_length = *self.nn_metric.feature_length();
         let mut features = Array2::<f32>::zeros((0, feature_length));
         let mut targets: Vec<usize> = vec![];
         self.tracks
@@ -162,12 +170,12 @@ impl Tracker {
             .for_each(|track| {
                 features = concatenate![Axis(0), features, *track.features()];
                 for _ in 0..track.features().nrows() {
-                    targets.push(*track.track_id());
+                    targets.push(track.track_id());
                 }
                 *track.features_mut() = Array2::zeros((0, feature_length));
             });
 
-        self.metric
+        self.nn_metric
             .partial_fit(&features, &targets, &active_targets)
     }
 
@@ -175,9 +183,9 @@ impl Tracker {
         &self,
         detections: &[Detection],
     ) -> (Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>) {
-        let metric = self.metric.clone();
+        let metric = self.nn_metric.clone();
         let kf = self.kf.clone();
-        let feature_length = *self.metric.feature_length();
+        let feature_length = *self.nn_metric.feature_length();
 
         let gated_metric = Rc::new(
             move |tracks: &[Track],
@@ -196,7 +204,7 @@ impl Tracker {
                 });
                 let targets = track_indices
                     .iter()
-                    .map(|i| *tracks.get(*i).unwrap().track_id())
+                    .map(|i| tracks.get(*i).unwrap().track_id())
                     .collect::<Vec<usize>>();
 
                 let cost_matrix = metric.distance(&features, &detection_indices, &targets);
@@ -215,26 +223,26 @@ impl Tracker {
         );
 
         // Split track set into confirmed and unconfirmed tracks.
-        let confirmed_tracks: Vec<usize> = self
-            .tracks
-            .iter()
-            .enumerate()
-            .filter(|(_, track)| track.is_confirmed())
+        let (confirmed_tracks, unconfirmed_tracks): (Vec<EnumeratedTrack>, Vec<EnumeratedTrack>) =
+            self.tracks
+                .iter()
+                .enumerate()
+                .partition(|(_, track)| track.is_confirmed());
+
+        let confirmed_tracks = confirmed_tracks
+            .into_iter()
             .map(|(i, _)| i)
-            .collect();
-        let unconfirmed_tracks: Vec<usize> = self
-            .tracks
-            .iter()
-            .enumerate()
-            .filter(|(_, track)| !track.is_confirmed())
+            .collect::<Vec<_>>();
+        let unconfirmed_tracks = unconfirmed_tracks
+            .into_iter()
             .map(|(i, _)| i)
-            .collect();
+            .collect::<Vec<_>>();
 
         // Associate confirmed tracks using appearance features.
         let (features_matches, features_unmatched_tracks, unmatched_detections) =
             linear_assignment::matching_cascade(
                 gated_metric,
-                *self.metric.matching_threshold(),
+                *self.nn_metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
                 detections,
@@ -247,17 +255,19 @@ impl Tracker {
             unconfirmed_tracks,
             features_unmatched_tracks
                 .iter()
-                .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() == 1)
-                .map(|v| v.to_owned())
-                .collect::<Vec<usize>>(),
+                .filter_map(|k| {
+                    (self.tracks.get(*k).unwrap().time_since_update() == 1).then(|| k.to_owned())
+                })
+                .collect::<Vec<_>>(),
         ]
         .concat();
 
         let features_unmatched_tracks = features_unmatched_tracks
             .iter()
-            .filter(|k| *self.tracks.get(**k).unwrap().time_since_update() != 1)
-            .map(|v| v.to_owned())
-            .collect::<Vec<usize>>();
+            .filter_map(|k| {
+                (self.tracks.get(*k).unwrap().time_since_update() != 1).then(|| k.to_owned())
+            })
+            .collect::<Vec<_>>();
 
         let (iou_matches, iou_unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
@@ -329,7 +339,7 @@ mod tests {
         let mut rng = Pcg32::seed_from_u64(0);
 
         // create random movement/scale this is a vectors so it can be easily copied to python for comparison
-        let mut movement_jitter = (0..1000).map(|_| next_f32(&mut rng)).collect::<Vec<f32>>();
+        let mut movement_jitter = (0..1000).map(|_| next_f32(&mut rng)).collect::<Vec<_>>();
         let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 1000);
 
         // create the feature vectors
@@ -338,8 +348,7 @@ mod tests {
         let d2_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
         let d3_feat = normal_vec(&mut rng, 0.0, 1.0, 128);
 
-        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-        let mut tracker = Tracker::new(metric, None, None, None);
+        let mut tracker = Tracker::default();
 
         for iteration in 0..iterations {
             // move up to right
@@ -444,8 +453,8 @@ mod tests {
         let track = tracker
             .tracks
             .iter()
-            .filter(|track| track.track_id() == &3)
-            .collect::<Vec<&Track>>();
+            .filter(|track| track.track_id() == 3)
+            .collect::<Vec<_>>();
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
@@ -456,8 +465,8 @@ mod tests {
         let track = tracker
             .tracks
             .iter()
-            .filter(|track| track.track_id() == &4)
-            .collect::<Vec<&Track>>();
+            .filter(|track| track.track_id() == 4)
+            .collect::<Vec<_>>();
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
@@ -474,11 +483,10 @@ mod tests {
         let mut rng = Pcg32::seed_from_u64(0);
 
         // create random movement/scale this is a vectors so it can be easily copied to python for comparison
-        let mut movement_jitter = (0..1000).map(|_| next_f32(&mut rng)).collect::<Vec<f32>>();
+        let mut movement_jitter = (0..1000).map(|_| next_f32(&mut rng)).collect::<Vec<_>>();
         let mut scale_jitter = normal_vec(&mut rng, 0.0, 0.2, 1000);
 
-        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-        let mut tracker = Tracker::new(metric, None, None, None);
+        let mut tracker = Tracker::default();
 
         for iteration in 0..iterations {
             // move up to right
@@ -539,8 +547,8 @@ mod tests {
         let track = tracker
             .tracks
             .iter()
-            .filter(|track| track.track_id() == &1)
-            .collect::<Vec<&Track>>();
+            .filter(|track| track.track_id() == 1)
+            .collect::<Vec<_>>();
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
@@ -551,8 +559,8 @@ mod tests {
         let track = tracker
             .tracks
             .iter()
-            .filter(|track| track.track_id() == &2)
-            .collect::<Vec<&Track>>();
+            .filter(|track| track.track_id() == 2)
+            .collect::<Vec<_>>();
         let track = track.first().unwrap();
         assert!(track.is_confirmed());
         assert_eq!(
@@ -5065,8 +5073,7 @@ mod tests {
         );
         expected.insert(90, BoundingBox::new(1770.5564, 0.0, 43.019608, 36.0));
 
-        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-        let mut tracker = Tracker::new(metric, None, None, None);
+        let mut tracker = Tracker::default();
 
         detections
             .iter()
@@ -5085,7 +5092,7 @@ mod tests {
                                 None,
                             )
                         })
-                        .collect::<Vec<Detection>>(),
+                        .collect::<Vec<_>>(),
                 );
 
                 // for debugging
@@ -5107,8 +5114,8 @@ mod tests {
             });
 
         tracker.tracks().iter().for_each(|track| {
-            assert!(expected.get(track.track_id()).is_some());
-            assert_eq!(track.bbox(), *expected.get(track.track_id()).unwrap());
+            assert!(expected.get(&track.track_id()).is_some());
+            assert_eq!(track.bbox(), *expected.get(&track.track_id()).unwrap());
         });
     }
 }

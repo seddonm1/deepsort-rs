@@ -240,8 +240,7 @@ fn make_detections() -> Vec<Vec<Detection>> {
 
 fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("tracker", |b| {
-        let metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
-        let mut tracker = Tracker::new(metric, None, None, None);
+        let mut tracker = Tracker::default();
 
         let detections = make_detections();
 

@@ -4,6 +4,8 @@ use ndarray::*;
 use ndarray_linalg::*;
 use std::collections::HashMap;
 
+const FEATURE_LENGTH: usize = 128;
+
 pub enum Metric {
     Cosine,
     Euclidean,
@@ -68,6 +70,12 @@ pub struct NearestNeighborDistanceMetric {
     samples: HashMap<usize, Array2<f32>>,
 }
 
+impl Default for NearestNeighborDistanceMetric {
+    fn default() -> Self {
+        Self::new(Metric::Cosine, None, None, None)
+    }
+}
+
 impl fmt::Debug for NearestNeighborDistanceMetric {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("NearestNeighborDistanceMetric")
@@ -102,7 +110,7 @@ impl NearestNeighborDistanceMetric {
         NearestNeighborDistanceMetric {
             metric,
             matching_threshold: matching_threshold.unwrap_or(0.2),
-            feature_length: feature_length.unwrap_or(128),
+            feature_length: feature_length.unwrap_or(FEATURE_LENGTH),
             budget,
             samples: HashMap::new(),
         }
@@ -144,9 +152,9 @@ impl NearestNeighborDistanceMetric {
                     target_features.push_row(feature).unwrap();
 
                     // if budget is set truncate num rows from bottom
-                    if let Some(budget) = &self.budget {
-                        if target_features.nrows() > *budget {
-                            target_features.slice_collapse(s![-(*budget as i32).., ..])
+                    if let Some(budget) = self.budget {
+                        if target_features.nrows() > budget {
+                            target_features.slice_collapse(s![-(budget as i32).., ..])
                         }
                     }
                 }

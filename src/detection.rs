@@ -47,13 +47,13 @@ impl Detection {
     }
 
     /// Returns the confidence of the detection
-    pub fn confidence(&self) -> &f32 {
-        &self.confidence
+    pub fn confidence(&self) -> f32 {
+        self.confidence
     }
 
     /// Returns the class identifier of the detection
-    pub fn class_id(&self) -> &Option<usize> {
-        &self.class_id
+    pub fn class_id(&self) -> Option<usize> {
+        self.class_id
     }
 
     /// Returns the class name of the detection

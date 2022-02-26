@@ -63,7 +63,7 @@ pub fn iou_cost(
     track_indices.iter().for_each(|track_idx| {
         let track = tracks.get(*track_idx).unwrap();
 
-        if *track.time_since_update() > 1 {
+        if track.time_since_update() > 1 {
             cost_matrix
                 .push_row(Array1::from_elem(detection_indices.len(), f32::MAX).view())
                 .unwrap();
