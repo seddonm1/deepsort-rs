@@ -30,3 +30,6 @@ harness = false
 
 [profile.bench]
 debug = true
+
+[env]
+OMP_NUM_THREADS = 4
