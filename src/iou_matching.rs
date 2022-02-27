@@ -12,7 +12,7 @@ use ndarray::*;
 /// # Returns
 ///
 /// The intersection over union in [0.0, 1.0] between the `bbox` and each candidate. A higher score means a larger fraction of the `bbox` is occluded by the candidate.
-fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
+fn intersection_over_union(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
     let bbox_tl = bbox.slice(s![..2]).to_owned();
     let bbox_br = &bbox_tl + bbox.slice(s![2..4]).to_owned();
     let candidates_tl = candidates.slice(s![.., 0..2]).to_owned();
@@ -50,7 +50,7 @@ fn iou(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
 ///
 /// A cost matrix of shape track_indices.len(), detection_indices.len() where entry (i, j) is:
 /// `1 - iou(tracks[track_indices[i]], detections[detection_indices[j]])`.
-pub fn iou_cost(
+pub fn intersection_over_union_cost(
     tracks: &[Track],
     detections: &[Detection],
     track_indices: Option<Vec<usize>>,
@@ -85,7 +85,7 @@ pub fn iou_cost(
             });
 
             cost_matrix
-                .push_row((1.0 - iou(&bbox, &candidates)).view())
+                .push_row((1.0 - intersection_over_union(&bbox, &candidates)).view())
                 .unwrap();
         }
     });
@@ -100,7 +100,7 @@ mod tests {
 
     #[test]
     fn iou() {
-        let iou = iou_matching::iou(
+        let iou = iou_matching::intersection_over_union(
             &arr1::<f32>(&[0.0, 0.0, 5.0, 5.0]),
             &arr2::<f32, _>(&[
                 [0.0, 0.0, 5.0, 5.0],
@@ -150,8 +150,12 @@ mod tests {
         let d4 = Detection::new(BoundingBox::new(4.0, 4.0, 5.0, 5.0), 1.0, None, None, None);
         let d5 = Detection::new(BoundingBox::new(5.0, 5.0, 5.0, 5.0), 1.0, None, None, None);
 
-        let cost_matrix =
-            iou_matching::iou_cost(&vec![t0, t1], &vec![d0, d1, d2, d3, d4, d5], None, None);
+        let cost_matrix = iou_matching::intersection_over_union_cost(
+            &vec![t0, t1],
+            &vec![d0, d1, d2, d3, d4, d5],
+            None,
+            None,
+        );
 
         assert_eq!(
             cost_matrix,

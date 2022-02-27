@@ -207,7 +207,7 @@ impl Tracker {
         // Associate only confirmed tracks using appearance features.
         let (features_matches, features_unmatched_tracks, unmatched_detections) =
             linear_assignment::matching_cascade(
-                self.nn_metric.gated_metric(self.kf.clone()),
+                self.nn_metric.distance_metric(self.kf.clone()),
                 self.nn_metric.matching_threshold(),
                 self.max_age,
                 &self.tracks,
@@ -228,7 +228,7 @@ impl Tracker {
         let iou_track_candidates = [unconfirmed_tracks, features_unmatched_tracks_recent].concat();
         let (iou_matches, iou_unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
-                Rc::new(iou_matching::iou_cost),
+                Rc::new(iou_matching::intersection_over_union_cost),
                 self.max_iou_distance,
                 &self.tracks,
                 detections,

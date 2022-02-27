@@ -73,7 +73,7 @@ pub struct NearestNeighborDistanceMetric {
 
 impl Default for NearestNeighborDistanceMetric {
     fn default() -> Self {
-        Self::new(Metric::Cosine, None, None, None)
+        Self::new(None, None, None, None)
     }
 }
 
@@ -98,18 +98,18 @@ impl NearestNeighborDistanceMetric {
     /// - `feature_length`: The feature vector length. Default `128`.
     /// - `budget`: If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
     pub fn new(
-        metric: Metric,
+        metric: Option<Metric>,
         matching_threshold: Option<f32>,
         feature_length: Option<usize>,
         budget: Option<usize>,
     ) -> NearestNeighborDistanceMetric {
-        let metric = match metric {
-            Metric::Cosine => cosine_distance,
-            Metric::Euclidean => euclidean_distance,
-        };
-
         NearestNeighborDistanceMetric {
-            metric,
+            metric: metric
+                .map(|metric| match metric {
+                    Metric::Cosine => cosine_distance,
+                    Metric::Euclidean => euclidean_distance,
+                })
+                .unwrap_or(cosine_distance),
             matching_threshold: matching_threshold.unwrap_or(0.2),
             feature_length: feature_length.unwrap_or(FEATURE_LENGTH),
             budget,
@@ -199,7 +199,7 @@ impl NearestNeighborDistanceMetric {
         cost_matrix
     }
 
-    /// Create the gated metric function required by the matching cascade
+    /// Create the distance metric function required by the matching cascade
     ///
     /// # Parameters
     ///
@@ -208,7 +208,7 @@ impl NearestNeighborDistanceMetric {
     /// # Returns
     ///
     /// A function that calculates the distance between the incoming detection features and track existing feature vector
-    pub fn gated_metric(&self, kf: KalmanFilter) -> DistanceMetricFn {
+    pub fn distance_metric(&self, kf: KalmanFilter) -> DistanceMetricFn {
         let nn_metric = self.clone();
         Rc::new(
             move |tracks: &[Track],
@@ -265,7 +265,7 @@ mod tests {
 
     #[test]
     fn partial_fit() {
-        let mut metric = NearestNeighborDistanceMetric::new(Metric::Cosine, None, None, None);
+        let mut metric = NearestNeighborDistanceMetric::new(None, None, None, None);
         metric.partial_fit(&array![[]], &[], &[]);
 
         metric.partial_fit(
@@ -328,7 +328,8 @@ mod tests {
 
     #[test]
     fn euclidean_distance() {
-        let mut metric = NearestNeighborDistanceMetric::new(Metric::Euclidean, None, None, None);
+        let mut metric =
+            NearestNeighborDistanceMetric::new(Some(Metric::Euclidean), None, None, None);
 
         metric.partial_fit(
             &stack![
