@@ -8,7 +8,8 @@ edition = "2021"
 lazy_static = "1.4.0"
 ndarray = { version = "0.15.4", features = ["blas"] }
 ndarray-linalg = { version = "0.14.1", features = ["intel-mkl-static"] }
-pathfinding = "3.0.10"
+fixedbitset = "0.4.1"
+num-traits = "0.2.14"
 
 [patch.crates-io]
 # this override is needed to force lax to build the parallelized not sequential version of intel-mkl (intel-mkl-src/mkl-static-lp64-iomp)
@@ -30,6 +31,3 @@ harness = false
 
 [profile.bench]
 debug = true
-
-[env]
-OMP_NUM_THREADS = 4

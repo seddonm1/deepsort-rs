@@ -1,7 +1,6 @@
 use crate::*;
+use kuhn_munkres::kuhn_munkres_min;
 use ndarray::*;
-use pathfinding::kuhn_munkres::kuhn_munkres_min;
-use pathfinding::matrix::Matrix;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -139,22 +138,13 @@ pub fn min_cost_matching(
         };
 
         // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (f32 does not implement `std::cmp::Ord`)
-        let cost_vec = filtered_cost_matrix
-            .mapv(|v| (v * 10_000_000_000.0) as i64)
-            .into_iter()
-            .collect::<Vec<_>>();
+        let cost_vec = filtered_cost_matrix.mapv(|v| (v * 10_000_000_000.0) as i64);
 
         // invoke the kuhn munkres min (aka hungarian) assignment algorithm
         // this is equivalent to `scipy.optimize.linear_sum_assignment(maximise=False)` but where scipy returns two arrays
         // (row_ind and col_ind) `kuhn_munkres_min` returns just the col_ind array leaving row_ind (which is just a row index) to be
         // derived manually.
-        let matrix = Matrix::from_vec(
-            filtered_cost_matrix.nrows(),
-            filtered_cost_matrix.ncols(),
-            cost_vec,
-        )
-        .unwrap();
-        let (_, col_indices) = kuhn_munkres_min(&matrix);
+        let (_, col_indices) = kuhn_munkres_min(&cost_vec);
         let row_indices = (0..col_indices.len() + filtered_indices.len())
             .filter(|i| !filtered_indices.contains(i))
             .collect::<Vec<_>>();

@@ -228,7 +228,7 @@ impl NearestNeighborDistanceMetric {
                 let targets = track_indices
                     .iter()
                     .map(|i| tracks.get(*i).unwrap().track_id())
-                    .collect::<Vec<usize>>();
+                    .collect::<Vec<_>>();
 
                 let cost_matrix = nn_metric.distance(&features, &detection_indices, &targets);
 

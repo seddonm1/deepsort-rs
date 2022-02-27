@@ -5,6 +5,7 @@ mod bounding_box;
 mod detection;
 mod iou_matching;
 mod kalman_filter;
+mod kuhn_munkres;
 mod linear_assignment;
 mod nn_matching;
 mod track;
