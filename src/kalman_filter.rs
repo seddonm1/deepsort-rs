@@ -209,7 +209,7 @@ impl KalmanFilter {
         covariance: &Array2<f32>,
         measurement: &Array1<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
-        let (projected_mean, projected_cov) = &self.clone().project(mean, covariance);
+        let (projected_mean, projected_cov) = &self.project(mean, covariance);
 
         let cholesky_factor = projected_cov.factorizec(UPLO::Lower).unwrap();
 

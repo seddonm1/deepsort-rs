@@ -53,44 +53,48 @@ fn intersection_over_union(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Arra
 pub fn intersection_over_union_cost(
     tracks: &[Track],
     detections: &[Detection],
-    track_indices: Option<Vec<usize>>,
-    detection_indices: Option<Vec<usize>>,
+    track_indices: Option<&[usize]>,
+    detection_indices: Option<&[usize]>,
 ) -> Array2<f32> {
-    let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
-    let detection_indices = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
+    let track_indices = track_indices
+        .map(|track_indices| track_indices.to_vec())
+        .unwrap_or_else(|| (0..tracks.len()).collect());
 
-    let mut cost_matrix = Array2::<f32>::zeros((0, detection_indices.len()));
-    track_indices.iter().for_each(|track_idx| {
-        let track = tracks.get(*track_idx).unwrap();
+    let detection_indices = detection_indices
+        .map(|detection_indices| detection_indices.to_vec())
+        .unwrap_or_else(|| (0..detections.len()).collect());
 
-        if track.time_since_update() > 1 {
-            cost_matrix
-                .push_row(Array1::from_elem(detection_indices.len(), f32::MAX).view())
-                .unwrap();
-        } else {
-            let bbox = track.bbox().to_tlwh();
-            let mut candidates = Array2::<f32>::zeros((0, 4));
-            detection_indices.iter().for_each(|detection_idx| {
-                candidates
-                    .push(
-                        Axis(0),
-                        detections
-                            .get(*detection_idx)
-                            .unwrap()
-                            .bbox()
-                            .to_tlwh()
-                            .view(),
-                    )
-                    .unwrap()
-            });
+    let candidates: Array2<f32> = stack(
+        Axis(0),
+        &detection_indices
+            .iter()
+            .map(|i| detections.get(*i).unwrap().bbox().to_tlwh())
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|tlwh| tlwh.view())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
 
-            cost_matrix
-                .push_row((1.0 - intersection_over_union(&bbox, &candidates)).view())
-                .unwrap();
-        }
-    });
+    stack(
+        Axis(0),
+        &track_indices
+            .iter()
+            .map(|i| {
+                let track = tracks.get(*i).unwrap();
 
-    cost_matrix
+                if track.time_since_update() > 1 {
+                    Array1::from_elem(detection_indices.len(), f32::MAX)
+                } else {
+                    1.0 - intersection_over_union(&track.bbox().to_tlwh(), &candidates)
+                }
+            })
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|array1| array1.view())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap()
 }
 
 #[cfg(test)]

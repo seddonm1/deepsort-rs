@@ -251,8 +251,8 @@ impl Tracker {
         let (mean, covariance) = self.kf.initiate(detection.bbox());
         let feature = detection
             .feature()
-            .clone()
-            .map(|feature| feature.insert_axis(Axis(0)));
+            .as_ref()
+            .map(|feature| feature.clone().insert_axis(Axis(0)));
         self.tracks.push(Track::new(
             mean,
             covariance,

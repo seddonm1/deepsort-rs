@@ -213,27 +213,37 @@ impl NearestNeighborDistanceMetric {
         Rc::new(
             move |tracks: &[Track],
                   detections: &[Detection],
-                  track_indices: Option<Vec<usize>>,
-                  detection_indices: Option<Vec<usize>>|
+                  track_indices: Option<&[usize]>,
+                  detection_indices: Option<&[usize]>|
                   -> Array2<f32> {
                 let detection_indices = detection_indices.unwrap();
                 let track_indices = track_indices.unwrap();
 
-                let mut features = Array2::<f32>::zeros((0, nn_metric.feature_length));
-                detection_indices.iter().for_each(|i| {
-                    if let Some(feature) = detections.get(*i).unwrap().feature() {
-                        features.push_row(feature.view()).unwrap()
-                    }
-                });
+                let features: Array2<f32> = stack(
+                    Axis(0),
+                    &detection_indices
+                        .iter()
+                        .filter_map(|i| {
+                            detections
+                                .get(*i)
+                                .unwrap()
+                                .feature()
+                                .as_ref()
+                                .map(|feature| feature.view())
+                        })
+                        .collect::<Vec<_>>(),
+                )
+                .unwrap();
+
                 let targets = track_indices
                     .iter()
                     .map(|i| tracks.get(*i).unwrap().track_id())
                     .collect::<Vec<_>>();
 
-                let cost_matrix = nn_metric.distance(&features, &detection_indices, &targets);
+                let cost_matrix = nn_metric.distance(&features, detection_indices, &targets);
 
                 linear_assignment::gate_cost_matrix(
-                    kf.clone(),
+                    &kf,
                     cost_matrix,
                     tracks,
                     detections,

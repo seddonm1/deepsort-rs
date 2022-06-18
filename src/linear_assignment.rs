@@ -5,7 +5,7 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 pub type DistanceMetricFn =
-    Rc<dyn Fn(&[Track], &[Detection], Option<Vec<usize>>, Option<Vec<usize>>) -> Array2<f32>>;
+    Rc<dyn Fn(&[Track], &[Detection], Option<&[usize]>, Option<&[usize]>) -> Array2<f32>>;
 
 #[derive(Debug, Clone)]
 pub struct Match {
@@ -88,8 +88,8 @@ pub fn min_cost_matching(
         let cost_matrix: Array2<f32> = (distance_metric)(
             tracks,
             detections,
-            Some(track_indices.clone()),
-            Some(detection_indices.clone()),
+            Some(&track_indices),
+            Some(&detection_indices),
         )
         .mapv(|v| v.min(max_distance + 1e-5));
 
@@ -299,12 +299,12 @@ pub fn matching_cascade(
 /// The modified cost matrix.
 #[allow(clippy::too_many_arguments)]
 pub fn gate_cost_matrix(
-    kf: KalmanFilter,
+    kf: &KalmanFilter,
     mut cost_matrix: Array2<f32>,
     tracks: &[Track],
     detections: &[Detection],
-    track_indices: Vec<usize>,
-    detection_indices: Vec<usize>,
+    track_indices: &[usize],
+    detection_indices: &[usize],
     gated_cost: Option<f32>,
     only_position: Option<bool>,
 ) -> Array2<f32> {
@@ -312,12 +312,17 @@ pub fn gate_cost_matrix(
     let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
     let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
 
-    let mut measurements = Array2::zeros((0, 4));
-    detection_indices.iter().for_each(|i| {
-        measurements
-            .push_row(detections.get(*i).unwrap().bbox().to_xyah().view())
-            .unwrap()
-    });
+    let measurements: Array2<f32> = stack(
+        Axis(0),
+        &detection_indices
+            .iter()
+            .map(|i| detections.get(*i).unwrap().bbox().to_xyah())
+            .collect::<Vec<_>>()
+            .iter()
+            .map(|xyah| xyah.view())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
 
     track_indices
         .iter()
@@ -516,12 +521,12 @@ mod tests {
         );
 
         let cost_matrix = linear_assignment::gate_cost_matrix(
-            kf,
+            &kf,
             cost_matrix,
             &[t0],
             &[d0, d1],
-            vec![0],
-            vec![0],
+            &[0],
+            &[0],
             None,
             None,
         );
