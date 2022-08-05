@@ -12,11 +12,8 @@ fixedbitset = "0.4.1"
 num-traits = "0.2.15"
 
 [patch.crates-io]
-# this override is needed to force lax to build the parallelized not sequential version of intel-mkl (intel-mkl-src/mkl-static-lp64-iomp)
+# this override is needed to force intel-mkl-src 0.7.0+mkl2020.1
 lax = { path = "./vendor/lax" }
-# these overrides are needed until https://github.com/rust-math/intel-mkl-src/pull/70 is merged
-intel-mkl-src = { path = "./vendor/intel-mkl-src/intel-mkl-src" }
-intel-mkl-tool = { path = "./vendor/intel-mkl-src/intel-mkl-tool" }
 
 [dev-dependencies]
 rand = "0.8.5"
