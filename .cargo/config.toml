@@ -1,2 +1,5 @@
+[build]
+rustflags = "-C target-cpu=native"
+
 [env]
 OMP_NUM_THREADS="4"
