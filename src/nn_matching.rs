@@ -216,8 +216,8 @@ impl NearestNeighborDistanceMetric {
                   track_indices: Option<&[usize]>,
                   detection_indices: Option<&[usize]>|
                   -> Array2<f32> {
-                let detection_indices = detection_indices.unwrap();
                 let track_indices = track_indices.unwrap();
+                let detection_indices = detection_indices.unwrap();
 
                 let features: Array2<f32> = stack(
                     Axis(0),

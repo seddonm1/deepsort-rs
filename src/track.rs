@@ -1,6 +1,5 @@
-use ndarray::*;
-
 use crate::*;
+use ndarray::*;
 
 /// Enumeration type for the single target track state:
 ///

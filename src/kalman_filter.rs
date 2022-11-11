@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use crate::BoundingBox;
-
 use ndarray::*;
 use ndarray_linalg::*;
+use std::collections::HashMap;
 
 lazy_static! {
     /**

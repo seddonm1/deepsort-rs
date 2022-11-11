@@ -1,7 +1,4 @@
-use std::rc::Rc;
-
 use crate::*;
-
 use ndarray::*;
 
 /// This is the multi-target tracker.
@@ -222,7 +219,7 @@ impl Tracker {
         let iou_track_candidates = [unconfirmed_tracks, features_unmatched_tracks_recent].concat();
         let (iou_matches, iou_unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
-                Rc::new(iou_matching::intersection_over_union_cost),
+                iou_matching::intersection_over_union_cost(),
                 self.max_iou_distance,
                 &self.tracks,
                 detections,

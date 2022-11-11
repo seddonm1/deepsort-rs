@@ -340,7 +340,6 @@ pub fn gate_cost_matrix(
 #[cfg(test)]
 mod tests {
     use std::iter::FromIterator;
-    use std::rc::Rc;
 
     use crate::*;
     use ndarray::*;
@@ -392,7 +391,7 @@ mod tests {
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
-                Rc::new(iou_matching::intersection_over_union_cost),
+                iou_matching::intersection_over_union_cost(),
                 0.7,
                 &[t0, t1, t2],
                 &[d0, d1, d2],
@@ -466,7 +465,7 @@ mod tests {
 
         let (matches, mut unmatched_tracks, mut unmatched_detections) =
             linear_assignment::matching_cascade(
-                Rc::new(iou_matching::intersection_over_union_cost),
+                iou_matching::intersection_over_union_cost(),
                 0.7,
                 30,
                 &[t0, t1, t2],
@@ -506,7 +505,7 @@ mod tests {
             None,
         );
 
-        let cost_matrix = iou_matching::intersection_over_union_cost(
+        let cost_matrix = iou_matching::intersection_over_union_cost()(
             &vec![t0.clone()],
             &vec![d0.clone(), d1.clone()],
             None,

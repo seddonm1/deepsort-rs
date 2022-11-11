@@ -1,6 +1,6 @@
 use crate::*;
-
 use ndarray::*;
+use std::rc::Rc;
 
 /// Compute intersection over union.
 ///
@@ -50,51 +50,54 @@ fn intersection_over_union(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Arra
 ///
 /// A cost matrix of shape track_indices.len(), detection_indices.len() where entry (i, j) is:
 /// `1 - iou(tracks[track_indices[i]], detections[detection_indices[j]])`.
-pub fn intersection_over_union_cost(
-    tracks: &[Track],
-    detections: &[Detection],
-    track_indices: Option<&[usize]>,
-    detection_indices: Option<&[usize]>,
-) -> Array2<f32> {
-    let track_indices = track_indices
-        .map(|track_indices| track_indices.to_vec())
-        .unwrap_or_else(|| (0..tracks.len()).collect());
+pub fn intersection_over_union_cost() -> DistanceMetricFn {
+    Rc::new(
+        move |tracks: &[Track],
+              detections: &[Detection],
+              track_indices: Option<&[usize]>,
+              detection_indices: Option<&[usize]>|
+              -> Array2<f32> {
+            let track_indices = track_indices
+                .map(|track_indices| track_indices.to_vec())
+                .unwrap_or_else(|| (0..tracks.len()).collect());
 
-    let detection_indices = detection_indices
-        .map(|detection_indices| detection_indices.to_vec())
-        .unwrap_or_else(|| (0..detections.len()).collect());
+            let detection_indices = detection_indices
+                .map(|detection_indices| detection_indices.to_vec())
+                .unwrap_or_else(|| (0..detections.len()).collect());
 
-    let candidates: Array2<f32> = stack(
-        Axis(0),
-        &detection_indices
-            .iter()
-            .map(|i| detections.get(*i).unwrap().bbox().to_tlwh())
-            .collect::<Vec<_>>()
-            .iter()
-            .map(|tlwh| tlwh.view())
-            .collect::<Vec<_>>(),
+            let candidates: Array2<f32> = stack(
+                Axis(0),
+                &detection_indices
+                    .iter()
+                    .map(|i| detections.get(*i).unwrap().bbox().to_tlwh())
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(|tlwh| tlwh.view())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+
+            stack(
+                Axis(0),
+                &track_indices
+                    .iter()
+                    .map(|i| {
+                        let track = tracks.get(*i).unwrap();
+
+                        if track.time_since_update() > 1 {
+                            Array1::from_elem(detection_indices.len(), f32::MAX)
+                        } else {
+                            1.0 - intersection_over_union(&track.bbox().to_tlwh(), &candidates)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(|array1| array1.view())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap()
+        },
     )
-    .unwrap();
-
-    stack(
-        Axis(0),
-        &track_indices
-            .iter()
-            .map(|i| {
-                let track = tracks.get(*i).unwrap();
-
-                if track.time_since_update() > 1 {
-                    Array1::from_elem(detection_indices.len(), f32::MAX)
-                } else {
-                    1.0 - intersection_over_union(&track.bbox().to_tlwh(), &candidates)
-                }
-            })
-            .collect::<Vec<_>>()
-            .iter()
-            .map(|array1| array1.view())
-            .collect::<Vec<_>>(),
-    )
-    .unwrap()
 }
 
 #[cfg(test)]
@@ -154,7 +157,7 @@ mod tests {
         let d4 = Detection::new(BoundingBox::new(4.0, 4.0, 5.0, 5.0), 1.0, None, None, None);
         let d5 = Detection::new(BoundingBox::new(5.0, 5.0, 5.0, 5.0), 1.0, None, None, None);
 
-        let cost_matrix = iou_matching::intersection_over_union_cost(
+        let cost_matrix = iou_matching::intersection_over_union_cost()(
             &vec![t0, t1],
             &vec![d0, d1, d2, d3, d4, d5],
             None,
