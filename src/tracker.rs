@@ -4,8 +4,6 @@ use crate::*;
 
 use ndarray::*;
 
-type EnumeratedTrack<'a> = (usize, &'a Track);
-
 /// This is the multi-target tracker.
 ///
 ///
@@ -190,19 +188,15 @@ impl Tracker {
         detections: &[Detection],
     ) -> (Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>) {
         // Split track set into confirmed and unconfirmed tracks.
-        let (confirmed_tracks, unconfirmed_tracks): (Vec<EnumeratedTrack>, Vec<EnumeratedTrack>) =
-            self.tracks
-                .iter()
-                .enumerate()
-                .partition(|(_, track)| track.is_confirmed());
-        let confirmed_tracks = confirmed_tracks
-            .into_iter()
-            .map(|(i, _)| i)
-            .collect::<Vec<_>>();
-        let unconfirmed_tracks = unconfirmed_tracks
-            .into_iter()
-            .map(|(i, _)| i)
-            .collect::<Vec<_>>();
+        let mut confirmed_tracks = Vec::new();
+        let mut unconfirmed_tracks = Vec::new();
+        self.tracks.iter().enumerate().for_each(|(i, track)| {
+            if track.is_confirmed() {
+                confirmed_tracks.push(i);
+            } else {
+                unconfirmed_tracks.push(i);
+            }
+        });
 
         // Associate only confirmed tracks using appearance features.
         let (features_matches, features_unmatched_tracks, unmatched_detections) =
