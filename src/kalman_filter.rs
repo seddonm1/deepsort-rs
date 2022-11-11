@@ -8,19 +8,17 @@ lazy_static! {
     Table for the 0.95 quantile of the chi-square distribution with N degrees of freedom (contains values for N=1, ..., 9).
     Taken from MATLAB/Octave's chi2inv function and used as Mahalanobis gating threshold.
     */
-    pub static ref CHI2INV95: HashMap<usize, f32> = {
-        let mut m = HashMap::new();
-        m.insert(1, 3.8415);
-        m.insert(2, 5.9915);
-        m.insert(3, 7.8147);
-        m.insert(4, 9.4877);
-        m.insert(5, 11.070);
-        m.insert(6, 12.592);
-        m.insert(7, 14.067);
-        m.insert(8, 15.507);
-        m.insert(9, 16.919);
-        m
-    };
+    pub static ref CHI2INV95: HashMap<usize, f32> = HashMap::from([
+        (1, 3.8415),
+        (2, 5.9915),
+        (3, 7.8147),
+        (4, 9.4877),
+        (5, 11.070),
+        (6, 12.592),
+        (7, 14.067),
+        (8, 15.507),
+        (9, 16.919),
+    ]);
 }
 
 /**
