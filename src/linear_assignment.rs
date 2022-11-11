@@ -222,18 +222,11 @@ pub fn matching_cascade(
     let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
     let unmatched_detections = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
 
-    // filter for only detections with feature vectors
-    let skipped_detections = unmatched_detections
-        .iter()
-        .filter(|detection_idx| detections.get(**detection_idx).unwrap().feature().is_none())
-        .cloned()
-        .collect::<Vec<_>>();
-
-    // filter for only detections with feature vectors
-    let mut unmatched_detections = unmatched_detections
-        .into_iter()
-        .filter(|detection_idx| detections.get(*detection_idx).unwrap().feature().is_some())
-        .collect::<Vec<_>>();
+    // split into detections with and without feature vectors
+    let (mut unmatched_detections, skipped_detections): (Vec<usize>, Vec<usize>) =
+        unmatched_detections
+            .into_iter()
+            .partition(|detection_idx| detections.get(*detection_idx).unwrap().feature().is_some());
 
     let mut matches: Vec<Match> = vec![];
 
