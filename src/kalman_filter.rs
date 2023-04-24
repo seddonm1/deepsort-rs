@@ -1,4 +1,5 @@
 use crate::BoundingBox;
+use lazy_static::*;
 use ndarray::*;
 use ndarray_linalg::*;
 use std::collections::HashMap;
