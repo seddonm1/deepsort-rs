@@ -127,7 +127,7 @@ impl Tracker {
                     detection: detection.clone(),
                     distance: feature_match.distance(),
                 }),
-            );
+            )?;
         }
         for iou_match in iou_matches {
             let detection = detections.get(iou_match.detection_idx()).unwrap();
@@ -139,7 +139,7 @@ impl Tracker {
                     detection: detection.clone(),
                     distance: iou_match.distance(),
                 }),
-            );
+            )?;
         }
         for unmatched_track in unmatched_tracks {
             self.tracks.get_mut(unmatched_track).unwrap().mark_missed();
@@ -164,13 +164,19 @@ impl Tracker {
         let mut targets: Vec<usize> = vec![];
         self.tracks
             .iter_mut()
-            .filter(|track| track.is_confirmed() && track.features().nrows() != 0)
+            .filter(|track| {
+                track.is_confirmed()
+                    && track
+                        .features()
+                        .map(|features| features.nrows() != 0)
+                        .unwrap_or(false)
+            })
             .for_each(|track| {
-                features = concatenate![Axis(0), features, *track.features()];
-                for _ in 0..track.features().nrows() {
+                features = concatenate![Axis(0), features, *track.features().unwrap()];
+                for _ in 0..track.features().unwrap().nrows() {
                     targets.push(track.track_id());
                 }
-                *track.features_mut() = Array2::zeros((0, feature_length));
+                *track.features_mut() = None;
             });
 
         self.nn_metric
@@ -264,14 +270,13 @@ impl Tracker {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use crate::*;
+    use anyhow::{Ok, Result};
     use ndarray::*;
-
     use rand::prelude::*;
     use rand_distr::Normal;
     use rand_pcg::{Lcg64Xsh32, Pcg32};
+    use std::collections::HashMap;
 
     /// Returns a psuedo-random (deterministic) f32 between -0.5 and +0.5
     fn next_f32(rng: &mut Lcg64Xsh32) -> f32 {
@@ -285,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn tracker_nearest_neighbor() {
+    fn tracker_nearest_neighbor() -> Result<()> {
         let iterations: i32 = 100;
 
         // deterministic generator
@@ -377,13 +382,13 @@ mod tests {
             // add and remove detections over the sequence
             match iteration {
                 _ if iteration >= 60 => {
-                    tracker.update(&[d2, d3]).unwrap();
+                    tracker.update(&[d2, d3])?;
                 }
                 _ if iteration >= 30 => {
-                    tracker.update(&[d0, d2]).unwrap();
+                    tracker.update(&[d0, d2])?;
                 }
                 _ => {
-                    tracker.update(&[d0, d1]).unwrap();
+                    tracker.update(&[d0, d1])?;
                 }
             }
 
@@ -430,10 +435,12 @@ mod tests {
             track.bbox().to_tlwh(),
             arr1::<f32>(&[9.640262, 48.84033, 5.1905212, 5.113961])
         );
+
+        Ok(())
     }
 
     #[test]
-    fn tracker_intersection_over_union() {
+    fn tracker_intersection_over_union() -> Result<()> {
         let iterations: i32 = 100;
 
         // deterministic generator
@@ -481,7 +488,7 @@ mod tests {
             );
 
             tracker.predict();
-            tracker.update(&[d0, d1]).unwrap();
+            tracker.update(&[d0, d1])?;
 
             // for debugging
             // for track in &tracker.tracks {
@@ -526,10 +533,12 @@ mod tests {
             track.bbox().to_tlwh(),
             arr1::<f32>(&[0.9682312, 0.8316479, 8.2856045, 8.30345])
         );
+
+        Ok(())
     }
 
     #[test]
-    fn tracker_oxford_town_center() {
+    fn tracker_oxford_town_center() -> Result<()> {
         let detections: Vec<Vec<Vec<f32>>> = vec![
             vec![
                 vec![1452.0, 32.0, 79.0, 155.0],
@@ -5037,25 +5046,23 @@ mod tests {
         detections
             .iter()
             .enumerate()
-            .for_each(|(_iteration, detection)| {
+            .try_for_each(|(_iteration, detection)| {
                 tracker.predict();
-                tracker
-                    .update(
-                        &detection
-                            .iter()
-                            .map(|d| {
-                                Detection::new(
-                                    None,
-                                    BoundingBox::new(d[0], d[1], d[2], d[3]),
-                                    1.0,
-                                    None,
-                                    None,
-                                    None,
-                                )
-                            })
-                            .collect::<Vec<_>>(),
-                    )
-                    .unwrap();
+                tracker.update(
+                    &detection
+                        .iter()
+                        .map(|d| {
+                            Detection::new(
+                                None,
+                                BoundingBox::new(d[0], d[1], d[2], d[3]),
+                                1.0,
+                                None,
+                                None,
+                                None,
+                            )
+                        })
+                        .collect::<Vec<_>>(),
+                )?;
 
                 // for debugging
                 // for track in &tracker.tracks {
@@ -5073,11 +5080,15 @@ mod tests {
                 //         track.match_source(),
                 //     );
                 // }
-            });
+
+                Ok(())
+            })?;
 
         tracker.tracks().iter().for_each(|track| {
             assert!(expected.get(&track.track_id()).is_some());
             assert_eq!(track.bbox(), *expected.get(&track.track_id()).unwrap());
         });
+
+        Ok(())
     }
 }

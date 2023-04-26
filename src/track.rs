@@ -1,4 +1,5 @@
 use crate::*;
+use anyhow::Result;
 use ndarray::*;
 
 /// Enumeration type for the single target track state:
@@ -49,7 +50,7 @@ pub struct Track {
     /// Total number of frames since last measurement update.
     time_since_update: usize,
     /// A cache of features. On each measurement update, the associated feature vector is added to this list.
-    features: Array2<f32>,
+    features: Option<Array2<f32>>,
 }
 
 impl Track {
@@ -87,7 +88,7 @@ impl Track {
             hits: 1,
             age: 1,
             time_since_update: 0,
-            features: feature.unwrap_or_else(|| Array2::<f32>::zeros((0, 128))),
+            features: feature,
         }
     }
 
@@ -132,12 +133,12 @@ impl Track {
     }
 
     /// Return the features of the track
-    pub fn features(&self) -> &Array2<f32> {
-        &self.features
+    pub fn features(&self) -> Option<&Array2<f32>> {
+        self.features.as_ref()
     }
 
     /// Return the mutable features of the track
-    pub fn features_mut(&mut self) -> &mut Array2<f32> {
+    pub fn features_mut(&mut self) -> &mut Option<Array2<f32>> {
         &mut self.features
     }
 
@@ -156,9 +157,7 @@ impl Track {
     ///
     /// - `kf`: The Kalman filter.
     pub fn predict(&mut self, kf: &KalmanFilter) {
-        let (mean, covariance) = kf.predict(&self.mean, &self.covariance);
-        self.mean = mean;
-        self.covariance = covariance;
+        (self.mean, self.covariance) = kf.predict(&self.mean, &self.covariance);
         self.age += 1;
         self.time_since_update += 1;
     }
@@ -174,25 +173,28 @@ impl Track {
         kf: &KalmanFilter,
         detection: &Detection,
         match_source: Option<MatchSource>,
-    ) {
-        let (mean, covariance) =
-            kf.update(&self.mean, &self.covariance, &detection.bbox().to_xyah());
-        self.mean = mean;
-        self.covariance = covariance;
+    ) -> Result<()> {
+        (self.mean, self.covariance) =
+            kf.update(&self.mean, &self.covariance, &detection.bbox().to_xyah())?;
 
         self.match_source = match_source;
         self.detection = detection.clone();
 
         if let Some(feature) = detection.feature() {
-            self.features.push_row(feature.view()).unwrap();
+            match &mut self.features {
+                Some(features) => features.push_row(feature.view())?,
+                None => self.features = Some(stack!(Axis(0), feature.to_owned())),
+            };
         }
 
         self.hits += 1;
         self.time_since_update = 0;
 
         if matches!(self.state, TrackState::Tentative) && self.hits >= self.n_init {
-            self.state = TrackState::Confirmed
+            self.state = TrackState::Confirmed;
         }
+
+        Ok(())
     }
 
     /// Mark this track as missed (no association at the current time step).
@@ -221,10 +223,10 @@ impl Track {
 
 #[cfg(test)]
 mod tests {
-    use std::iter::FromIterator;
-
     use crate::*;
+    use anyhow::Result;
     use ndarray::*;
+    use std::iter::FromIterator;
 
     #[test]
     fn to_tlwh() {
@@ -387,7 +389,7 @@ mod tests {
     }
 
     #[test]
-    fn update() {
+    fn update() -> Result<()> {
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
 
@@ -417,14 +419,14 @@ mod tests {
             None,
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
-        track.update(&kf, &detection, None);
+        track.update(&kf, &detection, None)?;
 
         assert!(track.is_confirmed());
         assert_eq!(track.hits, 2);
         assert_eq!(track.time_since_update, 0);
         assert_eq!(
             track.features,
-            stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
+            Some(stack![Axis(0), Array::range(0.0, 128.0, 1.0)])
         );
         assert_eq!(
             track.mean,
@@ -524,5 +526,7 @@ mod tests {
                 ]
             ]
         );
+
+        Ok(())
     }
 }

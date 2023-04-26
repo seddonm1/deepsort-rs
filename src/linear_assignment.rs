@@ -1,5 +1,5 @@
 use crate::*;
-use anyhow::Result;
+use anyhow::{Ok, Result};
 use kuhn_munkres::kuhn_munkres_min;
 use ndarray::*;
 use std::collections::HashSet;
@@ -127,9 +127,10 @@ pub fn min_cost_matching(
             indexed_cost_matrix.sort_unstable_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
             // push the remaining values into the matrix
-            indexed_cost_matrix.iter().for_each(|(_, row, _)| {
-                filtered_cost_matrix.push_row(*row).unwrap();
-            });
+            indexed_cost_matrix
+                .iter()
+                .try_for_each(|(_, row, _)| filtered_cost_matrix.push_row(*row))?;
+
             (&filtered_cost_matrix, filtered_indices)
         } else {
             (&cost_matrix, vec![])
@@ -298,7 +299,7 @@ pub fn gate_cost_matrix(
     detection_indices: &[usize],
     gated_cost: Option<f32>,
     only_position: Option<bool>,
-) -> Array2<f32> {
+) -> Result<Array2<f32>> {
     let gated_cost = gated_cost.unwrap_or(f32::MAX);
     let gating_dim: usize = if only_position.unwrap_or(false) { 2 } else { 4 };
     let gating_threshold = kalman_filter::CHI2INV95.get(&gating_dim).unwrap();
@@ -312,16 +313,15 @@ pub fn gate_cost_matrix(
             .iter()
             .map(|xyah| xyah.view())
             .collect::<Vec<_>>(),
-    )
-    .unwrap();
+    )?;
 
     track_indices
         .iter()
         .enumerate()
-        .for_each(|(row, track_idx)| {
+        .try_for_each(|(row, track_idx)| {
             let track = tracks.get(*track_idx).unwrap();
             let gating_distance =
-                kf.gating_distance(track.mean(), track.covariance(), &measurements);
+                kf.gating_distance(track.mean(), track.covariance(), &measurements)?;
             gating_distance
                 .iter()
                 .enumerate()
@@ -330,20 +330,22 @@ pub fn gate_cost_matrix(
                         cost_matrix[[row, i]] = gated_cost;
                     }
                 });
-        });
 
-    cost_matrix
+            Ok(())
+        })?;
+
+    Ok(cost_matrix)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::*;
+    use anyhow::Result;
+    use ndarray::*;
     use std::iter::FromIterator;
 
-    use crate::*;
-    use ndarray::*;
-
     #[test]
-    fn min_cost_matching() {
+    fn min_cost_matching() -> Result<()> {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
@@ -431,16 +433,17 @@ mod tests {
                 &[d0, d1, d2],
                 None,
                 None,
-            )
-            .unwrap();
+            )?;
 
         assert_eq!(matches, vec![Match::new(0, 1, 1.0), Match::new(1, 2, 1.0)]);
         assert_eq!(unmatched_tracks, vec![2]);
         assert_eq!(unmatched_detections, vec![0]);
+
+        Ok(())
     }
 
     #[test]
-    fn matching_cascade() {
+    fn matching_cascade() -> Result<()> {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
@@ -531,8 +534,7 @@ mod tests {
                 &[d0, d1, d2],
                 None,
                 None,
-            )
-            .unwrap();
+            )?;
 
         unmatched_tracks.sort_unstable();
         unmatched_detections.sort_unstable();
@@ -540,10 +542,12 @@ mod tests {
         assert_eq!(matches, vec![Match::new(0, 1, 1.0)]);
         assert_eq!(unmatched_tracks, vec![1, 2]);
         assert_eq!(unmatched_detections, vec![0, 2]);
+
+        Ok(())
     }
 
     #[test]
-    fn gate_cost_matrix() {
+    fn gate_cost_matrix() -> Result<()> {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.initiate(&BoundingBox::new(4.0, 5.0, 6.0, 7.0));
@@ -585,8 +589,7 @@ mod tests {
             &vec![d0.clone(), d1.clone()],
             &[0],
             &[0, 1],
-        )
-        .unwrap();
+        )?;
 
         let cost_matrix = linear_assignment::gate_cost_matrix(
             &kf,
@@ -597,7 +600,9 @@ mod tests {
             &[0],
             None,
             None,
-        );
+        )?;
         assert_eq!(cost_matrix, arr2::<f32, _>(&[[0.6153846, 1.0]]));
+
+        Ok(())
     }
 }

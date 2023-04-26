@@ -94,6 +94,7 @@ pub fn intersection_over_union_cost() -> DistanceMetricFn {
 #[cfg(test)]
 mod tests {
     use crate::*;
+    use anyhow::Result;
     use ndarray::*;
 
     #[test]
@@ -116,7 +117,7 @@ mod tests {
     }
 
     #[test]
-    fn iou_cost() {
+    fn iou_cost() -> Result<()> {
         let kf = KalmanFilter::new();
         let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 0.0, 5.0, 5.0));
         let t0 = Track::new(
@@ -209,8 +210,7 @@ mod tests {
             &vec![d0, d1, d2, d3, d4, d5],
             &[0, 1],
             &[0, 1, 2, 3, 4, 5],
-        )
-        .unwrap();
+        )?;
 
         assert_eq!(
             cost_matrix,
@@ -219,5 +219,7 @@ mod tests {
                 [1.0, 0.97959185, 0.9130435, 0.7804878, 0.5294118, 0.0]
             ])
         );
+
+        Ok(())
     }
 }

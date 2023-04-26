@@ -1,4 +1,5 @@
 use crate::BoundingBox;
+use anyhow::Result;
 use lazy_static::*;
 use ndarray::*;
 use ndarray_linalg::*;
@@ -205,22 +206,15 @@ impl KalmanFilter {
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
         measurement: &Array1<f32>,
-    ) -> (Array1<f32>, Array2<f32>) {
+    ) -> Result<(Array1<f32>, Array2<f32>)> {
         let (projected_mean, projected_cov) = &self.project(mean, covariance);
 
-        let cholesky_factor = projected_cov.factorizec(UPLO::Lower).unwrap();
+        let cholesky_factor = projected_cov.factorizec(UPLO::Lower)?;
 
         let covariance_dot = covariance.dot(&self.update_mat.t());
         let mut kalman_gain = Array2::<f32>::zeros((0, 4));
         for i in 0..covariance_dot.nrows() {
-            kalman_gain
-                .push_row(
-                    cholesky_factor
-                        .solvec(&covariance_dot.row(i))
-                        .unwrap()
-                        .view(),
-                )
-                .unwrap();
+            kalman_gain.push_row(cholesky_factor.solvec(&covariance_dot.row(i))?.view())?;
         }
 
         let innovation = measurement - projected_mean;
@@ -228,7 +222,7 @@ impl KalmanFilter {
         let new_mean = mean + innovation.dot(&kalman_gain.t());
         let new_covariance = covariance - kalman_gain.dot(projected_cov).dot(&kalman_gain.t());
 
-        (new_mean, new_covariance)
+        Ok((new_mean, new_covariance))
     }
 
     /// Compute gating distance between state distribution and measurements.
@@ -247,22 +241,21 @@ impl KalmanFilter {
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
         measurements: &Array2<f32>,
-    ) -> Array1<f32> {
+    ) -> Result<Array1<f32>> {
         let (mean, covariance) = &self.project(mean, covariance);
 
-        let cholesky_factor = covariance.cholesky(UPLO::Lower).unwrap();
+        let cholesky_factor = covariance.cholesky(UPLO::Lower)?;
         let d = measurements - mean;
-        let z = cholesky_factor
-            .solve_triangular(UPLO::Lower, Diag::NonUnit, &d.reversed_axes())
-            .unwrap();
+        let z = cholesky_factor.solve_triangular(UPLO::Lower, Diag::NonUnit, &d.reversed_axes())?;
 
-        (&z * &z).sum_axis(Axis(0))
+        Ok((&z * &z).sum_axis(Axis(0)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{BoundingBox, KalmanFilter};
+    use anyhow::Result;
     use assert_approx_eq::assert_approx_eq;
     use ndarray::*;
 
@@ -383,12 +376,13 @@ mod tests {
     }
 
     #[test]
-    fn update() {
+    fn update() -> Result<()> {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.initiate(&BoundingBox::new(0.0, 1.0, 2.0, 3.0));
         let (mean, covariance) = kf.predict(&mean, &covariance);
-        let (mean, covariance) = kf.update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]));
+        let (mean, covariance) =
+            kf.update(&mean, &covariance, &arr1::<f32>(&[1.0, 2.0, 3.0, 4.0]))?;
 
         assert_eq!(
             mean,
@@ -434,10 +428,12 @@ mod tests {
                 [0.0, 0.0, 0.0, 0.00464876, 0.0, 0.0, 0.0, 0.028244127]
             ]),
         );
+
+        Ok(())
     }
 
     #[test]
-    fn gating_distance() {
+    fn gating_distance() -> Result<()> {
         let kf = KalmanFilter::new();
 
         let (mean, covariance) = kf.initiate(&BoundingBox::new(1.0, 2.0, 3.0, 4.0));
@@ -450,9 +446,11 @@ mod tests {
                 BoundingBox::new(2.0, 3.0, 4.0, 5.0).to_xyah(),
                 BoundingBox::new(3.0, 4.0, 5.0, 6.0).to_xyah()
             ],
-        );
+        )?;
 
         assert_approx_eq!(squared_maha[0], 18.426916, 1e-4);
         assert_approx_eq!(squared_maha[1], 73.4081, 1e-4);
+
+        Ok(())
     }
 }
