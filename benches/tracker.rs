@@ -226,6 +226,7 @@ fn make_detections() -> Vec<Vec<Detection>> {
                 .iter()
                 .map(|d| {
                     Detection::new(
+                        None,
                         BoundingBox::new(d[0], d[1], d[2], d[3]),
                         1.0,
                         None,
@@ -248,14 +249,14 @@ fn criterion_benchmark(c: &mut Criterion) {
         for i in 0..10 {
             let step_detections = detections.get(i).unwrap();
             tracker.predict();
-            tracker.update(step_detections);
+            tracker.update(step_detections).unwrap();
         }
         let bench_detections = detections.get(10).unwrap();
 
         // run the benchmark
         b.iter(|| {
             tracker.predict();
-            tracker.update(black_box(bench_detections));
+            tracker.update(black_box(bench_detections)).unwrap();
         });
     });
 }

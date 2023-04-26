@@ -1,9 +1,8 @@
 use crate::{linear_assignment, Detection, DistanceMetricFn, KalmanFilter, Track};
+use anyhow::{Ok, Result};
 use ndarray::*;
 use ndarray_linalg::*;
-use std::collections::HashMap;
-use std::fmt;
-use std::rc::Rc;
+use std::{collections::HashMap, fmt, rc::Rc};
 
 const FEATURE_LENGTH: usize = 128;
 
@@ -111,7 +110,7 @@ impl NearestNeighborDistanceMetric {
     ) -> NearestNeighborDistanceMetric {
         NearestNeighborDistanceMetric {
             metric: metric.unwrap_or(Metric::Cosine),
-            confidence_threshold: confidence_threshold.unwrap_or(0.5),
+            confidence_threshold: confidence_threshold.unwrap_or(0.0),
             matching_threshold: matching_threshold.unwrap_or(0.2),
             feature_length: feature_length.unwrap_or(FEATURE_LENGTH),
             budget,
@@ -146,13 +145,13 @@ impl NearestNeighborDistanceMetric {
         features: &Array2<f32>,
         targets: &[usize],
         active_targets: &[usize],
-    ) {
+    ) -> Result<()> {
         targets
             .iter()
             .zip(features.rows().into_iter())
-            .for_each(|(target, feature)| match self.samples.get_mut(target) {
+            .try_for_each(|(target, feature)| match self.samples.get_mut(target) {
                 Some(target_features) => {
-                    target_features.push_row(feature).unwrap();
+                    target_features.push_row(feature)?;
 
                     // if budget is set truncate num rows from bottom
                     if let Some(budget) = self.budget {
@@ -160,15 +159,19 @@ impl NearestNeighborDistanceMetric {
                             target_features.slice_collapse(s![-(budget as i32).., ..])
                         }
                     }
+                    Ok(())
                 }
                 None => {
                     let mut target_features = Array2::<f32>::zeros((0, feature.len()));
-                    target_features.push_row(feature).unwrap();
+                    target_features.push_row(feature)?;
                     self.samples.insert(target.to_owned(), target_features);
+                    Ok(())
                 }
-            });
+            })?;
 
         self.samples.retain(|k, _| active_targets.contains(k));
+
+        Ok(())
     }
 
     /// Compute distance between features and targets.
@@ -186,24 +189,29 @@ impl NearestNeighborDistanceMetric {
         features: &Array2<f32>,
         detections: &[usize],
         targets: &[usize],
-    ) -> Array2<f32> {
+    ) -> Result<Array2<f32>> {
         let mut cost_matrix = Array2::<f32>::zeros((0, detections.len()));
         let metric_fn = match self.metric {
             Metric::Cosine => cosine_distance,
             Metric::Euclidean => euclidean_distance,
         };
 
-        targets.iter().for_each(|target| {
+        targets.iter().try_for_each(|target| {
             match self.samples.get(target) {
-                Some(samples) => cost_matrix
-                    .push_row(metric_fn(samples, features).view())
-                    .unwrap(),
-                None => cost_matrix
-                    .push_row(Array1::<f32>::from_elem(detections.len(), 1.0).view())
-                    .unwrap(),
+                Some(samples) => {
+                    println!("{:?}", cost_matrix);
+                    println!("{:?}", metric_fn(samples, features).view());
+                    cost_matrix.push_row(metric_fn(samples, features).view())?
+                }
+                None => {
+                    cost_matrix.push_row(Array1::<f32>::from_elem(detections.len(), 1.0).view())?
+                }
             };
-        });
-        cost_matrix
+
+            Ok(())
+        })?;
+
+        Ok(cost_matrix)
     }
 
     /// Create the distance metric function required by the matching cascade
@@ -222,13 +230,10 @@ impl NearestNeighborDistanceMetric {
         Rc::new(
             move |tracks: &[Track],
                   detections: &[Detection],
-                  track_indices: Option<&[usize]>,
-                  detection_indices: Option<&[usize]>|
-                  -> Array2<f32> {
-                let track_indices = track_indices.unwrap();
-                let detection_indices = detection_indices.unwrap();
-
-                let features: Array2<f32> = stack(
+                  track_indices: &[usize],
+                  detection_indices: &[usize]|
+                  -> Result<Array2<f32>> {
+                let features = stack(
                     Axis(0),
                     &detection_indices
                         .iter()
@@ -251,9 +256,9 @@ impl NearestNeighborDistanceMetric {
                     .map(|i| tracks.get(*i).unwrap().track_id())
                     .collect::<Vec<_>>();
 
-                let cost_matrix = nn_metric.distance(&features, detection_indices, &targets);
+                let cost_matrix = nn_metric.distance(&features, detection_indices, &targets)?;
 
-                linear_assignment::gate_cost_matrix(
+                Ok(linear_assignment::gate_cost_matrix(
                     &kf,
                     cost_matrix,
                     tracks,
@@ -262,7 +267,7 @@ impl NearestNeighborDistanceMetric {
                     detection_indices,
                     None,
                     None,
-                )
+                ))
             },
         )
     }
@@ -287,17 +292,19 @@ mod tests {
     #[test]
     fn partial_fit() {
         let mut metric = NearestNeighborDistanceMetric::new(None, None, None, None, None);
-        metric.partial_fit(&array![[]], &[], &[]);
+        metric.partial_fit(&array![[]], &[], &[]).unwrap();
 
-        metric.partial_fit(
-            &stack![
-                Axis(0),
-                Array::range(0.0, 128.0, 1.0),
-                Array::range(0.0, 128.0, 1.0)
-            ],
-            &[0, 1],
-            &[0, 1],
-        );
+        metric
+            .partial_fit(
+                &stack![
+                    Axis(0),
+                    Array::range(0.0, 128.0, 1.0),
+                    Array::range(0.0, 128.0, 1.0)
+                ],
+                &[0, 1],
+                &[0, 1],
+            )
+            .unwrap();
         assert_eq!(
             metric.samples.get(&0).unwrap(),
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
@@ -307,11 +314,13 @@ mod tests {
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
         );
 
-        metric.partial_fit(
-            &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
-            &[0],
-            &[0, 1],
-        );
+        metric
+            .partial_fit(
+                &stack![Axis(0), Array::range(1.0, 129.0, 1.0)],
+                &[0],
+                &[0, 1],
+            )
+            .unwrap();
         assert_eq!(
             metric.samples.get(&0).unwrap(),
             stack![
@@ -325,7 +334,9 @@ mod tests {
             stack![Axis(0), Array::range(0.0, 128.0, 1.0)]
         );
 
-        metric.partial_fit(&stack![Axis(0), Array::range(1.0, 129.0, 1.0)], &[1], &[1]);
+        metric
+            .partial_fit(&stack![Axis(0), Array::range(1.0, 129.0, 1.0)], &[1], &[1])
+            .unwrap();
         assert_eq!(metric.samples.get(&0), None);
         assert_eq!(
             metric.samples.get(&1).unwrap(),
@@ -352,25 +363,29 @@ mod tests {
         let mut metric =
             NearestNeighborDistanceMetric::new(Some(Metric::Euclidean), None, None, None, None);
 
-        metric.partial_fit(
-            &stack![
-                Axis(0),
-                Array::range(0.0, 128.0, 1.0),
-                Array::range(1.0, 129.0, 1.0)
-            ],
-            &[0, 1],
-            &[0, 1],
-        );
+        metric
+            .partial_fit(
+                &stack![
+                    Axis(0),
+                    Array::range(0.0, 128.0, 1.0),
+                    Array::range(1.0, 129.0, 1.0)
+                ],
+                &[0, 1],
+                &[0, 1],
+            )
+            .unwrap();
 
-        let distances = metric.distance(
-            &stack![
-                Axis(0),
-                Array::range(0.1, 128.1, 1.0),
-                Array::range(1.1, 129.1, 1.0)
-            ],
-            &[0, 1],
-            &[0, 1],
-        );
+        let distances = metric
+            .distance(
+                &stack![
+                    Axis(0),
+                    Array::range(0.1, 128.1, 1.0),
+                    Array::range(1.1, 129.1, 1.0)
+                ],
+                &[0, 1],
+                &[0, 1],
+            )
+            .unwrap();
 
         assert_eq!(
             distances,

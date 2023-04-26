@@ -1,4 +1,5 @@
 use crate::*;
+use anyhow::Result;
 use ndarray::*;
 use std::rc::Rc;
 
@@ -54,17 +55,9 @@ pub fn intersection_over_union_cost() -> DistanceMetricFn {
     Rc::new(
         move |tracks: &[Track],
               detections: &[Detection],
-              track_indices: Option<&[usize]>,
-              detection_indices: Option<&[usize]>|
-              -> Array2<f32> {
-            let track_indices = track_indices
-                .map(|track_indices| track_indices.to_vec())
-                .unwrap_or_else(|| (0..tracks.len()).collect());
-
-            let detection_indices = detection_indices
-                .map(|detection_indices| detection_indices.to_vec())
-                .unwrap_or_else(|| (0..detections.len()).collect());
-
+              track_indices: &[usize],
+              detection_indices: &[usize]|
+              -> Result<Array2<f32>> {
             let candidates: Array2<f32> = stack(
                 Axis(0),
                 &detection_indices
@@ -74,10 +67,9 @@ pub fn intersection_over_union_cost() -> DistanceMetricFn {
                     .iter()
                     .map(|tlwh| tlwh.view())
                     .collect::<Vec<_>>(),
-            )
-            .unwrap();
+            )?;
 
-            stack(
+            Ok(stack(
                 Axis(0),
                 &track_indices
                     .iter()
@@ -94,8 +86,7 @@ pub fn intersection_over_union_cost() -> DistanceMetricFn {
                     .iter()
                     .map(|array1| array1.view())
                     .collect::<Vec<_>>(),
-            )
-            .unwrap()
+            )?)
         },
     )
 }
@@ -132,7 +123,14 @@ mod tests {
             mean,
             covariance,
             0,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
@@ -144,25 +142,75 @@ mod tests {
             mean,
             covariance,
             1,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
         );
 
-        let d0 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None, None);
-        let d1 = Detection::new(BoundingBox::new(1.0, 1.0, 5.0, 5.0), 1.0, None, None, None);
-        let d2 = Detection::new(BoundingBox::new(2.0, 2.0, 5.0, 5.0), 1.0, None, None, None);
-        let d3 = Detection::new(BoundingBox::new(3.0, 3.0, 5.0, 5.0), 1.0, None, None, None);
-        let d4 = Detection::new(BoundingBox::new(4.0, 4.0, 5.0, 5.0), 1.0, None, None, None);
-        let d5 = Detection::new(BoundingBox::new(5.0, 5.0, 5.0, 5.0), 1.0, None, None, None);
+        let d0 = Detection::new(
+            None,
+            BoundingBox::new(0.0, 0.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d1 = Detection::new(
+            None,
+            BoundingBox::new(1.0, 1.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d2 = Detection::new(
+            None,
+            BoundingBox::new(2.0, 2.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d3 = Detection::new(
+            None,
+            BoundingBox::new(3.0, 3.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d4 = Detection::new(
+            None,
+            BoundingBox::new(4.0, 4.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d5 = Detection::new(
+            None,
+            BoundingBox::new(5.0, 5.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
 
         let cost_matrix = iou_matching::intersection_over_union_cost()(
             &vec![t0, t1],
             &vec![d0, d1, d2, d3, d4, d5],
-            None,
-            None,
-        );
+            &[0, 1],
+            &[0, 1, 2, 3, 4, 5],
+        )
+        .unwrap();
 
         assert_eq!(
             cost_matrix,

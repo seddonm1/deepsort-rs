@@ -1,4 +1,5 @@
 use crate::*;
+use anyhow::Result;
 use ndarray::*;
 
 /// This is the multi-target tracker.
@@ -15,6 +16,7 @@ use ndarray::*;
 /// // create a detection
 /// // feature vector from a metric learning model output
 /// let detection = Detection::new(
+///     None,
 ///     BoundingBox::new(0.0, 0.0, 5.0, 5.0),
 ///     1.0,
 ///     None,
@@ -109,10 +111,10 @@ impl Tracker {
     /// # Parameters
     ///
     /// - `detections`: A list of detections at the current time step.
-    pub fn update(&mut self, detections: &[Detection]) {
+    pub fn update(&mut self, detections: &[Detection]) -> Result<()> {
         // Run matching cascade.
         let (features_matches, iou_matches, unmatched_tracks, unmatched_detections) =
-            self.matching_cascade(detections);
+            self.matching_cascade(detections)?;
 
         // Update track set.
         for feature_match in features_matches {
@@ -172,7 +174,9 @@ impl Tracker {
             });
 
         self.nn_metric
-            .partial_fit(&features, &targets, &active_targets);
+            .partial_fit(&features, &targets, &active_targets)?;
+
+        Ok(())
     }
 
     /// The matching cascade.
@@ -180,10 +184,11 @@ impl Tracker {
     /// It works in two stages:
     /// - first run the nn_metric matching to try to associate matches using the feature vector
     /// - with the remaining tracks attempt to match using iou
+    #[allow(clippy::type_complexity)]
     fn matching_cascade(
         &self,
         detections: &[Detection],
-    ) -> (Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>) {
+    ) -> Result<(Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>)> {
         // Split track set into confirmed and unconfirmed tracks.
         let mut confirmed_tracks = Vec::new();
         let mut unconfirmed_tracks = Vec::new();
@@ -205,7 +210,7 @@ impl Tracker {
                 detections,
                 Some(confirmed_tracks),
                 None,
-            );
+            )?;
 
         // partition the unmatched tracks into recent (time_since_update == 1) and older
         let (features_unmatched_tracks_recent, features_unmatched_tracks): (
@@ -225,17 +230,17 @@ impl Tracker {
                 detections,
                 Some(iou_track_candidates),
                 Some(unmatched_detections),
-            );
+            )?;
 
         let mut unmatched_tracks = [features_unmatched_tracks, iou_unmatched_tracks].concat();
         unmatched_tracks.dedup();
 
-        (
+        Ok((
             features_matches,
             iou_matches,
             unmatched_tracks,
             unmatched_detections,
-        )
+        ))
     }
 
     fn initiate_track(&mut self, detection: Detection) {
@@ -303,6 +308,7 @@ mod tests {
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0 = Detection::new(
+                None,
                 BoundingBox::new(
                     d0_x,
                     d0_y,
@@ -319,6 +325,7 @@ mod tests {
             let d1_x = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1 = Detection::new(
+                None,
                 BoundingBox::new(
                     d1_x,
                     d1_y,
@@ -335,6 +342,7 @@ mod tests {
             let d2_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d2_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d2 = Detection::new(
+                None,
                 BoundingBox::new(
                     d2_x,
                     d2_y,
@@ -351,6 +359,7 @@ mod tests {
             let d3_x = 0.0 + (iteration as f32 * 0.1) + movement_jitter.pop().unwrap();
             let d3_y = 0.0 + ((iteration - 50) as f32) + movement_jitter.pop().unwrap();
             let d3 = Detection::new(
+                None,
                 BoundingBox::new(
                     d3_x,
                     d3_y,
@@ -368,13 +377,13 @@ mod tests {
             // add and remove detections over the sequence
             match iteration {
                 _ if iteration >= 60 => {
-                    tracker.update(&[d2, d3]);
+                    tracker.update(&[d2, d3]).unwrap();
                 }
                 _ if iteration >= 30 => {
-                    tracker.update(&[d0, d2]);
+                    tracker.update(&[d0, d2]).unwrap();
                 }
                 _ => {
-                    tracker.update(&[d0, d1]);
+                    tracker.update(&[d0, d1]).unwrap();
                 }
             }
 
@@ -441,6 +450,7 @@ mod tests {
             let d0_x = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0_y = 0.0 + (iteration as f32) + movement_jitter.pop().unwrap();
             let d0 = Detection::new(
+                None,
                 BoundingBox::new(
                     d0_x,
                     d0_y,
@@ -457,6 +467,7 @@ mod tests {
             let d1_x = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1_y = 100.0 - (iteration as f32) + movement_jitter.pop().unwrap();
             let d1 = Detection::new(
+                None,
                 BoundingBox::new(
                     d1_x,
                     d1_y,
@@ -470,7 +481,7 @@ mod tests {
             );
 
             tracker.predict();
-            tracker.update(&[d0, d1]);
+            tracker.update(&[d0, d1]).unwrap();
 
             // for debugging
             // for track in &tracker.tracks {
@@ -5028,20 +5039,23 @@ mod tests {
             .enumerate()
             .for_each(|(_iteration, detection)| {
                 tracker.predict();
-                tracker.update(
-                    &detection
-                        .iter()
-                        .map(|d| {
-                            Detection::new(
-                                BoundingBox::new(d[0], d[1], d[2], d[3]),
-                                1.0,
-                                None,
-                                None,
-                                None,
-                            )
-                        })
-                        .collect::<Vec<_>>(),
-                );
+                tracker
+                    .update(
+                        &detection
+                            .iter()
+                            .map(|d| {
+                                Detection::new(
+                                    None,
+                                    BoundingBox::new(d[0], d[1], d[2], d[3]),
+                                    1.0,
+                                    None,
+                                    None,
+                                    None,
+                                )
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                    .unwrap();
 
                 // for debugging
                 // for track in &tracker.tracks {

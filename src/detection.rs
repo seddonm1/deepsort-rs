@@ -1,9 +1,12 @@
 use crate::BoundingBox;
 use ndarray::*;
+use uuid::Uuid;
 
 /// Detection represents a bounding box detection in a single image.
 #[derive(Debug, Clone)]
 pub struct Detection {
+    /// Unique detection identifier
+    id: Uuid,
     /// Bounding box in top, left, width, height format.
     bbox: BoundingBox,
     /// Detection confidence score.
@@ -26,6 +29,7 @@ impl Detection {
     /// - `class_id`: An optional class identifier.
     /// - `feature`: A feature vector that describes the object contained in this image.
     pub fn new(
+        id: Option<Uuid>,
         bbox: BoundingBox,
         confidence: f32,
         class_id: Option<usize>,
@@ -33,12 +37,18 @@ impl Detection {
         feature: Option<Vec<f32>>,
     ) -> Detection {
         Detection {
+            id: id.unwrap_or_else(Uuid::new_v4),
             bbox,
             confidence,
             class_id,
             class_name,
             feature: feature.map(Array1::from_vec),
         }
+    }
+
+    /// Returns the unique id of the detection
+    pub fn id(&self) -> &Uuid {
+        &self.id
     }
 
     /// Returns a BoundingBox of the detection co-ordinates

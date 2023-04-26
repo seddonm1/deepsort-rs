@@ -1,11 +1,12 @@
 use crate::*;
+use anyhow::Result;
 use kuhn_munkres::kuhn_munkres_min;
 use ndarray::*;
 use std::collections::HashSet;
 use std::rc::Rc;
 
 pub type DistanceMetricFn =
-    Rc<dyn Fn(&[Track], &[Detection], Option<&[usize]>, Option<&[usize]>) -> Array2<f32>>;
+    Rc<dyn Fn(&[Track], &[Detection], &[usize], &[usize]) -> Result<Array2<f32>>>;
 
 #[derive(Debug, Clone)]
 pub struct Match {
@@ -56,7 +57,8 @@ impl PartialEq for Match {
 ///
 /// # Parameters
 ///
-/// - `distance_metric` : The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices. The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection_indices.
+/// - `distance_metric` : The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices.
+///   The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection_indices.
 /// - `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
 /// - `tracks`: A list of predicted tracks at the current time step.
 /// - `detections`: A list of detections at the current time step.
@@ -78,20 +80,16 @@ pub fn min_cost_matching(
     detections: &[Detection],
     track_indices: Option<Vec<usize>>,
     detection_indices: Option<Vec<usize>>,
-) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
+) -> Result<(Vec<Match>, Vec<usize>, Vec<usize>)> {
     let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
     let detection_indices = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
 
     if detection_indices.is_empty() || track_indices.is_empty() {
-        (vec![], track_indices, detection_indices)
+        Ok((vec![], track_indices, detection_indices))
     } else {
-        let cost_matrix: Array2<f32> = (distance_metric)(
-            tracks,
-            detections,
-            Some(&track_indices),
-            Some(&detection_indices),
-        )
-        .mapv(|v| v.min(max_distance + 1e-5));
+        let cost_matrix: Array2<f32> =
+            (distance_metric)(tracks, detections, &track_indices, &detection_indices)?
+                .mapv(|v| v.min(max_distance + 1e-5));
 
         // `kuhn_munkres_min` requires nrows() <= ncols() whereas scipy.optimize.linear_sum_assignment is able to process where nrows > ncols:
         // 'If it has more rows than columns, then not every row needs to be assigned to a column'
@@ -187,7 +185,7 @@ pub fn min_cost_matching(
                 }
             });
 
-        (matches, unmatched_tracks, unmatched_detections)
+        Ok((matches, unmatched_tracks, unmatched_detections))
     }
 }
 
@@ -218,7 +216,7 @@ pub fn matching_cascade(
     detections: &[Detection],
     track_indices: Option<Vec<usize>>,
     detection_indices: Option<Vec<usize>>,
-) -> (Vec<Match>, Vec<usize>, Vec<usize>) {
+) -> Result<(Vec<Match>, Vec<usize>, Vec<usize>)> {
     let track_indices = track_indices.unwrap_or_else(|| (0..tracks.len()).collect());
     let unmatched_detections = detection_indices.unwrap_or_else(|| (0..detections.len()).collect());
 
@@ -254,7 +252,7 @@ pub fn matching_cascade(
             detections,
             Some(level_track_indices),
             Some(unmatched_detections.to_owned()),
-        );
+        )?;
         matches.extend_from_slice(&level_matches);
         unmatched_detections = level_unmatched_detections;
     }
@@ -267,11 +265,11 @@ pub fn matching_cascade(
         .cloned()
         .collect::<Vec<_>>();
 
-    (
+    Ok((
         matches,
         unmatched_tracks,
         [unmatched_detections, skipped_detections].concat(),
-    )
+    ))
 }
 
 /// Invalidate infeasible entries in cost matrix based on the state distributions obtained by Kalman filtering.
@@ -353,7 +351,14 @@ mod tests {
             mean,
             covariance,
             0,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
@@ -363,7 +368,14 @@ mod tests {
             mean,
             covariance,
             1,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
@@ -373,21 +385,43 @@ mod tests {
             mean,
             covariance,
             2,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
         );
 
         let d0 = Detection::new(
+            None,
             BoundingBox::new(10.0, 10.0, 5.0, 5.0),
             1.0,
             None,
             None,
             None,
         );
-        let d1 = Detection::new(BoundingBox::new(0.0, 0.0, 5.0, 5.0), 1.0, None, None, None);
-        let d2 = Detection::new(BoundingBox::new(0.5, 0.5, 5.0, 5.0), 1.0, None, None, None);
+        let d1 = Detection::new(
+            None,
+            BoundingBox::new(0.0, 0.0, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
+        let d2 = Detection::new(
+            None,
+            BoundingBox::new(0.5, 0.5, 5.0, 5.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
 
         let (matches, unmatched_tracks, unmatched_detections) =
             linear_assignment::min_cost_matching(
@@ -397,7 +431,8 @@ mod tests {
                 &[d0, d1, d2],
                 None,
                 None,
-            );
+            )
+            .unwrap();
 
         assert_eq!(matches, vec![Match::new(0, 1, 1.0), Match::new(1, 2, 1.0)]);
         assert_eq!(unmatched_tracks, vec![2]);
@@ -413,7 +448,14 @@ mod tests {
             mean,
             covariance,
             0,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
@@ -423,7 +465,14 @@ mod tests {
             mean,
             covariance,
             1,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
@@ -433,13 +482,21 @@ mod tests {
             mean,
             covariance,
             2,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
         );
 
         let d0 = Detection::new(
+            None,
             BoundingBox::new(10.0, 10.0, 5.0, 5.0),
             1.0,
             None,
@@ -447,6 +504,7 @@ mod tests {
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
         let d1 = Detection::new(
+            None,
             BoundingBox::new(0.0, 0.0, 5.0, 5.0),
             1.0,
             None,
@@ -454,6 +512,7 @@ mod tests {
             Some(Vec::<f32>::from_iter((0..128).map(|v| v as f32))),
         );
         let d2 = Detection::new(
+            None,
             BoundingBox::new(0.5, 0.5, 5.0, 5.0),
             1.0,
             None,
@@ -472,7 +531,8 @@ mod tests {
                 &[d0, d1, d2],
                 None,
                 None,
-            );
+            )
+            .unwrap();
 
         unmatched_tracks.sort_unstable();
         unmatched_detections.sort_unstable();
@@ -491,13 +551,28 @@ mod tests {
             mean,
             covariance,
             0,
-            Detection::new(BoundingBox::new(0.0, 0.0, 0.0, 0.0), 1.0, None, None, None),
+            Detection::new(
+                None,
+                BoundingBox::new(0.0, 0.0, 0.0, 0.0),
+                1.0,
+                None,
+                None,
+                None,
+            ),
             0,
             30,
             None,
         );
-        let d0 = Detection::new(BoundingBox::new(3.0, 4.0, 5.0, 6.0), 1.0, None, None, None);
+        let d0 = Detection::new(
+            None,
+            BoundingBox::new(3.0, 4.0, 5.0, 6.0),
+            1.0,
+            None,
+            None,
+            None,
+        );
         let d1 = Detection::new(
+            None,
             BoundingBox::new(20.0, 20.0, 5.0, 6.0),
             1.0,
             None,
@@ -508,9 +583,10 @@ mod tests {
         let cost_matrix = iou_matching::intersection_over_union_cost()(
             &vec![t0.clone()],
             &vec![d0.clone(), d1.clone()],
-            None,
-            None,
-        );
+            &[0],
+            &[0, 1],
+        )
+        .unwrap();
 
         let cost_matrix = linear_assignment::gate_cost_matrix(
             &kf,
