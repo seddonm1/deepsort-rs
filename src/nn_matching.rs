@@ -137,24 +137,26 @@ impl NearestNeighborDistanceMetric {
         targets
             .iter()
             .zip(features.rows().into_iter())
-            .try_for_each(|(target, feature)| match self.samples.get_mut(target) {
-                Some(target_features) => {
-                    target_features.push_row(feature)?;
+            .try_for_each(|(target, feature)| {
+                match self.samples.get_mut(target) {
+                    Some(target_features) => {
+                        target_features.push_row(feature)?;
 
-                    // if budget is set truncate num rows from bottom
-                    if let Some(budget) = self.budget {
-                        if target_features.nrows() > budget {
-                            target_features.slice_collapse(s![-(budget as i32).., ..])
+                        // if budget is set truncate num rows from bottom
+                        if let Some(budget) = self.budget {
+                            if target_features.nrows() > budget {
+                                target_features.slice_collapse(s![-(budget as i32).., ..])
+                            }
                         }
                     }
-                    Ok(())
-                }
-                None => {
-                    let mut target_features = Array2::<f32>::zeros((0, feature.len()));
-                    target_features.push_row(feature)?;
-                    self.samples.insert(target.to_owned(), target_features);
-                    Ok(())
-                }
+                    None => {
+                        let mut target_features = Array2::<f32>::zeros((0, feature.len()));
+                        target_features.push_row(feature)?;
+                        self.samples.insert(target.to_owned(), target_features);
+                    }
+                };
+
+                Ok(())
             })?;
 
         self.samples.retain(|k, _| active_targets.contains(k));
@@ -207,9 +209,10 @@ impl NearestNeighborDistanceMetric {
     /// # Returns
     ///
     /// A function that calculates the distance between the incoming detection features and track existing feature vector
-    pub fn distance_metric(&self, kf: KalmanFilter) -> DistanceMetricFn {
+    pub fn distance_metric(&self, kf: &KalmanFilter) -> DistanceMetricFn {
         let confidence_threshold = self.confidence_threshold;
         let nn_metric = self.clone();
+        let kf = kf.clone();
 
         Rc::new(
             move |tracks: &[Track],

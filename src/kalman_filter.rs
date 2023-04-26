@@ -244,8 +244,8 @@ impl KalmanFilter {
     ) -> Result<Array1<f32>> {
         let (mean, covariance) = &self.project(mean, covariance);
 
-        let cholesky_factor = covariance.cholesky(UPLO::Lower)?;
         let d = measurements - mean;
+        let cholesky_factor = covariance.cholesky(UPLO::Lower)?;
         let z = cholesky_factor.solve_triangular(UPLO::Lower, Diag::NonUnit, &d.reversed_axes())?;
 
         Ok((&z * &z).sum_axis(Axis(0)))

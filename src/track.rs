@@ -65,7 +65,7 @@ impl Track {
     /// - `class_id`: An optional class identifier.
     /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
     /// - `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
-    /// - `feature`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
+    /// - `features`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         mean: Array1<f32>,
@@ -74,7 +74,7 @@ impl Track {
         detection: Detection,
         n_init: usize,
         max_age: usize,
-        feature: Option<Array2<f32>>,
+        features: Option<Array2<f32>>,
     ) -> Track {
         Track {
             state: TrackState::Tentative,
@@ -88,7 +88,7 @@ impl Track {
             hits: 1,
             age: 1,
             time_since_update: 0,
-            features: feature,
+            features,
         }
     }
 
