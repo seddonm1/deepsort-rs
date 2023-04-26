@@ -4,8 +4,6 @@ use ndarray::*;
 use ndarray_linalg::*;
 use std::{collections::HashMap, fmt, rc::Rc};
 
-const FEATURE_LENGTH: usize = 128;
-
 #[derive(Clone)]
 pub enum Metric {
     Cosine,
@@ -68,15 +66,13 @@ pub struct NearestNeighborDistanceMetric {
     matching_threshold: f32,
     /// If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
     budget: Option<usize>,
-    /// The length of the feature vectors.
-    feature_length: usize,
     /// A HashMap that maps from target identities to the list of samples that have been observed so far.
     samples: HashMap<usize, Array2<f32>>,
 }
 
 impl Default for NearestNeighborDistanceMetric {
     fn default() -> Self {
-        Self::new(None, None, None, None, None)
+        Self::new(None, None, None, None)
     }
 }
 
@@ -85,7 +81,6 @@ impl fmt::Debug for NearestNeighborDistanceMetric {
         f.debug_struct("NearestNeighborDistanceMetric")
             .field("matching_threshold", &self.matching_threshold)
             .field("budget", &self.budget)
-            .field("feature_length", &self.feature_length)
             .field("samples", &self.samples)
             .finish()
     }
@@ -105,14 +100,12 @@ impl NearestNeighborDistanceMetric {
         metric: Option<Metric>,
         confidence_threshold: Option<f32>,
         matching_threshold: Option<f32>,
-        feature_length: Option<usize>,
         budget: Option<usize>,
     ) -> NearestNeighborDistanceMetric {
         NearestNeighborDistanceMetric {
             metric: metric.unwrap_or(Metric::Cosine),
             confidence_threshold: confidence_threshold.unwrap_or(0.0),
             matching_threshold: matching_threshold.unwrap_or(0.2),
-            feature_length: feature_length.unwrap_or(FEATURE_LENGTH),
             budget,
             samples: HashMap::new(),
         }
@@ -121,11 +114,6 @@ impl NearestNeighborDistanceMetric {
     /// Return the matching threshold
     pub fn matching_threshold(&self) -> f32 {
         self.matching_threshold
-    }
-
-    /// Return the feature length
-    pub fn feature_length(&self) -> usize {
-        self.feature_length
     }
 
     /// Return the stored feature vectors for a given track identifier
@@ -198,11 +186,7 @@ impl NearestNeighborDistanceMetric {
 
         targets.iter().try_for_each(|target| {
             match self.samples.get(target) {
-                Some(samples) => {
-                    println!("{:?}", cost_matrix);
-                    println!("{:?}", metric_fn(samples, features).view());
-                    cost_matrix.push_row(metric_fn(samples, features).view())?
-                }
+                Some(samples) => cost_matrix.push_row(metric_fn(samples, features).view())?,
                 None => {
                     cost_matrix.push_row(Array1::<f32>::from_elem(detections.len(), 1.0).view())?
                 }
@@ -290,7 +274,7 @@ mod tests {
 
     #[test]
     fn partial_fit() -> Result<()> {
-        let mut metric = NearestNeighborDistanceMetric::new(None, None, None, None, None);
+        let mut metric = NearestNeighborDistanceMetric::new(None, None, None, None);
         metric.partial_fit(&array![[]], &[], &[])?;
 
         metric.partial_fit(
@@ -354,7 +338,7 @@ mod tests {
     #[test]
     fn euclidean_distance() -> Result<()> {
         let mut metric =
-            NearestNeighborDistanceMetric::new(Some(Metric::Euclidean), None, None, None, None);
+            NearestNeighborDistanceMetric::new(Some(Metric::Euclidean), None, None, None);
 
         metric.partial_fit(
             &stack![

@@ -158,11 +158,9 @@ impl Tracker {
             .filter_map(|track| track.is_confirmed().then(|| track.track_id()))
             .collect();
 
-        // For any confirmed tracks 'partial_fit' the features into the metric.samples hashmap and remove from track
-        let feature_length = self.nn_metric.feature_length();
-        let mut features = Array2::<f32>::zeros((0, feature_length));
-        let mut targets: Vec<usize> = vec![];
-        self.tracks
+        // For any confirmed tracks that have features 'partial_fit' the features into the metric.samples hashmap and remove from track
+        let mut tracks_with_features = self
+            .tracks
             .iter_mut()
             .filter(|track| {
                 track.is_confirmed()
@@ -171,16 +169,30 @@ impl Tracker {
                         .map(|features| features.nrows() != 0)
                         .unwrap_or(false)
             })
-            .for_each(|track| {
-                features = concatenate![Axis(0), features, *track.features().unwrap()];
-                for _ in 0..track.features().unwrap().nrows() {
-                    targets.push(track.track_id());
-                }
+            .collect::<Vec<_>>();
+
+        if !tracks_with_features.is_empty() {
+            let mut targets: Vec<usize> = vec![];
+            let features = concatenate(
+                Axis(0),
+                &tracks_with_features
+                    .iter()
+                    .map(|track| {
+                        for _ in 0..track.features().unwrap().nrows() {
+                            targets.push(track.track_id());
+                        }
+                        track.features().unwrap().view()
+                    })
+                    .collect::<Vec<_>>(),
+            )?;
+
+            tracks_with_features.iter_mut().for_each(|track| {
                 *track.features_mut() = None;
             });
 
-        self.nn_metric
-            .partial_fit(&features, &targets, &active_targets)?;
+            self.nn_metric
+                .partial_fit(&features, &targets, &active_targets)?;
+        }
 
         Ok(())
     }
@@ -276,7 +288,6 @@ mod tests {
     use rand::prelude::*;
     use rand_distr::Normal;
     use rand_pcg::{Lcg64Xsh32, Pcg32};
-    use std::collections::HashMap;
 
     /// Returns a psuedo-random (deterministic) f32 between -0.5 and +0.5
     fn next_f32(rng: &mut Lcg64Xsh32) -> f32 {
@@ -538,7 +549,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "oxford")]
     fn tracker_oxford_town_center() -> Result<()> {
+        use std::collections::HashMap;
+
         let detections: Vec<Vec<Vec<f32>>> = vec![
             vec![
                 vec![1452.0, 32.0, 79.0, 155.0],
