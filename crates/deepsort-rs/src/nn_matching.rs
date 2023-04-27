@@ -111,6 +111,30 @@ impl NearestNeighborDistanceMetric {
         }
     }
 
+    /// Set metric
+    pub fn with_metric(&mut self, metric: Metric) -> &mut Self {
+        self.metric = metric;
+        self
+    }
+
+    /// Set confidence_threshold
+    pub fn with_confidence_threshold(&mut self, confidence_threshold: f32) -> &mut Self {
+        self.confidence_threshold = confidence_threshold;
+        self
+    }
+
+    /// Set matching_threshold
+    pub fn with_matching_threshold(&mut self, matching_threshold: f32) -> &mut Self {
+        self.matching_threshold = matching_threshold;
+        self
+    }
+
+    /// Set budget
+    pub fn with_budget(&mut self, budget: usize) -> &mut Self {
+        self.budget = Some(budget);
+        self
+    }
+
     /// Return the matching threshold
     pub fn matching_threshold(&self) -> f32 {
         self.matching_threshold

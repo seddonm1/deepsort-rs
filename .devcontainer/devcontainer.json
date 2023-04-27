@@ -3,7 +3,8 @@
 {
 	"name": "Rust",
 	"build": {
-		"dockerfile": "Dockerfile"
+		"dockerfile": "Dockerfile",
+		"context": ".."
 	},
 	"runArgs": [
 		"--cap-add=SYS_PTRACE",

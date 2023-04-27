@@ -89,6 +89,30 @@ impl Tracker {
         }
     }
 
+    /// Set nn_metric
+    pub fn with_nn_metric(&mut self, nn_metric: NearestNeighborDistanceMetric) -> &mut Self {
+        self.nn_metric = nn_metric;
+        self
+    }
+
+    /// Set max_iou_distance
+    pub fn with_max_iou_distance(&mut self, max_iou_distance: f32) -> &mut Self {
+        self.max_iou_distance = max_iou_distance;
+        self
+    }
+
+    /// Set max_age
+    pub fn with_max_age(&mut self, max_age: usize) -> &mut Self {
+        self.max_age = max_age;
+        self
+    }
+
+    /// Set n_init
+    pub fn with_n_init(&mut self, n_init: usize) -> &mut Self {
+        self.n_init = n_init;
+        self
+    }
+
     /// Return the tracks
     pub fn tracks(&self) -> &Vec<Track> {
         &self.tracks
