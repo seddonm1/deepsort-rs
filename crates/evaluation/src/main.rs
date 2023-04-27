@@ -42,6 +42,10 @@ struct Args {
     #[arg(short, long, default_value_t = 0.5)]
     score_threshold: f32,
 
+    /// The minimum confidence required to perform feature matching
+    #[arg(short, long, default_value_t = 0.6)]
+    feature_threshold: f32,
+
     /// Write debug images
     #[arg(short, long, default_value_t = false)]
     write_images: bool,
@@ -167,7 +171,7 @@ fn main() -> Result<()> {
                                 let x1 = x1.clamp(0.0, frame.width() as f32);
                                 let y1 = y1.clamp(0.0, frame.height() as f32);
 
-                                let feature_vector = if confidence < 1.0 {
+                                let feature_vector = if confidence < args.feature_threshold {
                                     None
                                 } else {
                                     let person = imageops::crop_imm(
