@@ -229,7 +229,7 @@ fn main() -> Result<()> {
             let mut frame_results = IndexMap::<PathBuf, Vec<Detection>>::new();
             results.into_iter().for_each(|(path, detection)| {
                 frame_results
-                    .entry(path)
+                    .entry(path.to_path_buf())
                     .and_modify(|detections| detections.push(detection.clone()))
                     .or_insert(vec![detection]);
             });
