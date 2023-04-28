@@ -1,7 +1,9 @@
 mod utils;
 use anyhow::{Ok, Result};
 use clap::Parser;
-use deepsort_rs::{BoundingBox, Detection, MatchSource, NearestNeighborDistanceMetric, Tracker};
+use deepsort_rs::{
+    BoundingBox, Detection, MatchSource, NearestNeighborDistanceMetric, Track, Tracker,
+};
 use image::{imageops, ImageBuffer, Rgb};
 use imageproc::rect::Rect;
 use indexmap::IndexMap;
@@ -263,7 +265,13 @@ fn main() -> Result<()> {
                     .create(true)
                     .open(output_file)?;
 
-                tracker.tracks().iter().try_for_each(|track| {
+                let tracks = tracker
+                    .tracks()
+                    .iter()
+                    .filter(|track| track.is_confirmed())
+                    .collect::<Vec<_>>();
+
+                tracks.iter().try_for_each(|track| {
                     // output format
                     // <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <conf>, <x>, <y>, <z>
                     // 1,0.0,102.3751449584961,547.8447875976561,83.81769561767578,250.82427978515625,1,-1,-1,-1
@@ -281,7 +289,7 @@ fn main() -> Result<()> {
                 })?;
 
                 if args.write_images {
-                    write_images(path, &tracker, &font)?
+                    write_images(path, tracks, &font)?
                 };
 
                 Ok(())
@@ -293,14 +301,14 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn write_images(path: &PathBuf, tracker: &Tracker, font: &Font) -> Result<()> {
+fn write_images(path: &PathBuf, tracks: Vec<&Track>, font: &Font) -> Result<()> {
     let mut frame = image::io::Reader::open(path)
         .unwrap()
         .decode()
         .unwrap()
         .to_rgb8();
 
-    tracker.tracks().iter().for_each(|track| {
+    tracks.iter().for_each(|track| {
         let color = match track.match_source() {
             Some(match_source) => match match_source {
                 MatchSource::NearestNeighbor { .. } => Rgb([255u8, 0u8, 0u8]),
