@@ -15,6 +15,6 @@ RUN apt update &&\
     gfortran \
     ffmpeg
 
-COPY TrackEval/requirements.txt /tmp
+COPY crates/evaluation/TrackEval/requirements.txt /tmp
 
-RUN pip3 install -r tmp/requirements.txt
+RUN pip3 install -r /tmp/requirements.txt

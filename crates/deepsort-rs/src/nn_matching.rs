@@ -60,8 +60,6 @@ fn euclidean_distance(x: &Array2<f32>, y: &Array2<f32>) -> Array1<f32> {
 pub struct NearestNeighborDistanceMetric {
     /// Either Cosine or Euclidean distance.
     metric: Metric,
-    /// The minimum confidence to consider this detection for Nearest Neighbor matching.
-    confidence_threshold: f32,
     /// The matching threshold. Samples with larger distance are considered an invalid match.
     matching_threshold: f32,
     /// If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
@@ -72,7 +70,7 @@ pub struct NearestNeighborDistanceMetric {
 
 impl Default for NearestNeighborDistanceMetric {
     fn default() -> Self {
-        Self::new(None, None, None, None)
+        Self::new(None, None, None)
     }
 }
 
@@ -92,19 +90,16 @@ impl NearestNeighborDistanceMetric {
     /// # Parameters
     ///
     /// - `metric`: Either `Metric::Euclidean` or `Metric::Cosine`.
-    /// - `confidence_threshold`: The minimum confidence to consider this detection for Nearest Neighbor matching.
     /// - `matching_threshold`: The matching threshold. Samples with larger distance are considered an invalid match. Default `0.2`.
     /// - `feature_length`: The feature vector length. Default `128`.
     /// - `budget`: If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
     pub fn new(
         metric: Option<Metric>,
-        confidence_threshold: Option<f32>,
         matching_threshold: Option<f32>,
         budget: Option<usize>,
     ) -> NearestNeighborDistanceMetric {
         NearestNeighborDistanceMetric {
             metric: metric.unwrap_or(Metric::Cosine),
-            confidence_threshold: confidence_threshold.unwrap_or(0.0),
             matching_threshold: matching_threshold.unwrap_or(0.2),
             budget,
             samples: HashMap::new(),
@@ -114,12 +109,6 @@ impl NearestNeighborDistanceMetric {
     /// Set metric
     pub fn with_metric(&mut self, metric: Metric) -> &mut Self {
         self.metric = metric;
-        self
-    }
-
-    /// Set confidence_threshold
-    pub fn with_confidence_threshold(&mut self, confidence_threshold: f32) -> &mut Self {
-        self.confidence_threshold = confidence_threshold;
         self
     }
 
@@ -204,7 +193,7 @@ impl NearestNeighborDistanceMetric {
         detections: &[usize],
         targets: &[usize],
     ) -> Result<Array2<f32>> {
-        let mut cost_matrix = Array2::<f32>::zeros((0, detections.len()));
+        let mut cost_matrix = Array2::<f32>::zeros((0, features.nrows()));
         let metric_fn = match self.metric {
             Metric::Cosine => cosine_distance,
             Metric::Euclidean => euclidean_distance,
@@ -234,7 +223,6 @@ impl NearestNeighborDistanceMetric {
     ///
     /// A function that calculates the distance between the incoming detection features and track existing feature vector
     pub fn distance_metric(&self, kf: &KalmanFilter) -> DistanceMetricFn {
-        let confidence_threshold = self.confidence_threshold;
         let nn_metric = self.clone();
         let kf = kf.clone();
 
@@ -250,13 +238,7 @@ impl NearestNeighborDistanceMetric {
                         .iter()
                         .filter_map(|i| {
                             let detection = detections.get(*i).unwrap();
-
-                            // only include detections that meet the minimum confidence_threshold and have features
-                            if detection.confidence() > confidence_threshold {
-                                detection.feature().as_ref().map(|feature| feature.view())
-                            } else {
-                                None
-                            }
+                            detection.feature().as_ref().map(|feature| feature.view())
                         })
                         .collect::<Vec<_>>(),
                 )?;
@@ -301,7 +283,7 @@ mod tests {
 
     #[test]
     fn partial_fit() -> Result<()> {
-        let mut metric = NearestNeighborDistanceMetric::new(None, None, None, None);
+        let mut metric = NearestNeighborDistanceMetric::new(None, None, None);
         metric.partial_fit(&array![[]], &[], &[])?;
 
         metric.partial_fit(
@@ -364,8 +346,7 @@ mod tests {
 
     #[test]
     fn euclidean_distance() -> Result<()> {
-        let mut metric =
-            NearestNeighborDistanceMetric::new(Some(Metric::Euclidean), None, None, None);
+        let mut metric = NearestNeighborDistanceMetric::new(Some(Metric::Euclidean), None, None);
 
         metric.partial_fit(
             &stack![
