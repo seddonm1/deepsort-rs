@@ -71,10 +71,6 @@ enum Commands {
         #[arg(long, default_value_t = 0)]
         min_detection_height: u32,
 
-        /// Non-maxima suppression threshold: Maximum detection overlap.
-        #[arg(long, default_value_t = 1.0)]
-        nms_max_overlap: f32,
-
         /// Gating threshold for cosine distance metric (object appearance).
         #[arg(long, default_value_t = 1.0)]
         max_cosine_distance: f32,
@@ -185,24 +181,24 @@ fn main() -> Result<()> {
             output_dir,
             min_confidence,
             min_detection_height: _,
-            nms_max_overlap: _,
             max_cosine_distance,
             nn_budget,
         } => {
-            let mut tracker = Tracker::default();
-            tracker.with_nn_metric(
-                NearestNeighborDistanceMetric::default()
-                    .with_matching_threshold(max_cosine_distance)
-                    .with_budget(nn_budget)
-                    .to_owned(),
-            );
-
             let npy_paths = glob::glob(&format!("{}/*.npy", detection_dir.to_string_lossy()))
                 .unwrap()
                 .filter_map(|path| path.ok())
                 .collect::<Vec<_>>();
 
             for npy_path in npy_paths {
+                println!("{:?}", npy_path);
+                let mut tracker = Tracker::default();
+                tracker.with_nn_metric(
+                    NearestNeighborDistanceMetric::default()
+                        .with_matching_threshold(max_cosine_distance)
+                        .with_budget(nn_budget)
+                        .to_owned(),
+                );
+
                 let bytes = std::fs::read(npy_path.clone())?;
                 let npy = npyz::NpyFile::new(&bytes[..])?;
                 let shape = npy.shape().to_owned();
@@ -251,14 +247,14 @@ fn main() -> Result<()> {
                 });
 
                 std::fs::create_dir_all(output_dir.clone())?;
-                let mut output_file =
-                    OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .open(output_dir.join(format!(
-                            "{}.txt",
-                            npy_path.file_stem().unwrap().to_string_lossy()
-                        )))?;
+                let mut output_file = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .create(true)
+                    .open(output_dir.join(format!(
+                        "{}.txt",
+                        npy_path.file_stem().unwrap().to_string_lossy()
+                    )))?;
 
                 frame_detections
                     .into_iter()

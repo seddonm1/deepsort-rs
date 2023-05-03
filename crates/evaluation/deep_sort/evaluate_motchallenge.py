@@ -42,7 +42,6 @@ if __name__ == "__main__":
 
     os.makedirs(args.output_dir, exist_ok=True)
     sequences = os.listdir(args.mot_dir)
-    sequences = ['MOT16-02']
     for sequence in sequences:
         print("Running sequence %s" % sequence)
         sequence_dir = os.path.join(args.mot_dir, sequence)
