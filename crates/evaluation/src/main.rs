@@ -4,10 +4,16 @@ use clap::{Parser, Subcommand};
 use deepsort_rs::{Detection, NearestNeighborDistanceMetric, Tracker};
 use image::imageops;
 use indexmap::IndexMap;
+use npyz::WriterBuilder;
 use rayon::prelude::*;
-use std::{collections::HashMap, fs::OpenOptions, io::Write, path::PathBuf};
+use std::{
+    fs::{File, OpenOptions},
+    io::Write,
+    path::PathBuf,
+};
 use tract_ndarray::{s, ShapeBuilder};
 use tract_onnx::prelude::*;
+
 // use utils::*;
 
 use serde::Deserialize;
@@ -87,7 +93,7 @@ fn main() -> Result<()> {
         Commands::Generate {
             model,
             mot_dir,
-            output_dir: _,
+            output_dir,
         } => {
             let feature_session = tract_onnx::onnx()
                 .model_for_path(model)?
@@ -95,30 +101,55 @@ fn main() -> Result<()> {
                 .into_optimized()?
                 .into_runnable()?;
 
-            let gts = glob::glob(&format!("{}/*/det/det.txt", mot_dir.to_string_lossy()))
-                .unwrap()
-                .filter_map(|path| path.ok())
-                .collect::<Vec<_>>();
+            let input_shapes = feature_session
+                .model
+                .input_fact(0)?
+                .shape
+                .iter()
+                .map(|dim| Ok(dim.to_i64()?))
+                .collect::<Result<Vec<_>>>()?;
+            let input_width = *input_shapes.get(3).unwrap() as usize;
+            let input_height = *input_shapes.get(2).unwrap() as usize;
 
-            for gt in gts {
-                let sequence_base = gt.parent().unwrap().parent().unwrap();
+            let output_shapes = feature_session
+                .model
+                .output_fact(0)?
+                .shape
+                .iter()
+                .map(|dim| Ok(dim.to_i64()?))
+                .collect::<Result<Vec<_>>>()?;
+            let feature_length = *output_shapes.get(1).unwrap() as usize;
+
+            let dets = glob::glob(&format!(
+                "{}/*/det/deepsort_det.txt",
+                mot_dir.to_string_lossy()
+            ))
+            .unwrap()
+            .filter_map(|path| path.ok())
+            .collect::<Vec<_>>();
+
+            for det in dets {
+                println!("{:?}", det);
+                let sequence_base = det.parent().unwrap().parent().unwrap();
                 let image_base = sequence_base.join("img1");
-                // let sequence = sequence_base
-                //     .file_name()
-                //     .unwrap()
-                //     .to_str()
-                //     .unwrap()
-                //     .to_owned();
+                let sequence = sequence_base
+                    .file_name()
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_owned();
 
                 let mut reader = csv::ReaderBuilder::new()
                     .has_headers(false)
-                    .from_path(gt.clone())?;
+                    .from_path(det.clone())?;
                 let mot_detections = reader
                     .deserialize::<MotDetection>()
                     .map(|mot_detection| Ok(mot_detection?))
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut frame_mot_detections = HashMap::<usize, Vec<MotDetection>>::new();
+                let num_detections = mot_detections.len();
+
+                let mut frame_mot_detections = IndexMap::<usize, Vec<MotDetection>>::new();
                 mot_detections.into_iter().for_each(|mot_detection| {
                     frame_mot_detections
                         .entry(mot_detection.frame)
@@ -126,16 +157,19 @@ fn main() -> Result<()> {
                         .or_insert(vec![mot_detection]);
                 });
 
-                frame_mot_detections
-                    .par_iter()
-                    .map(|(frame, mot_detections)| {
-                        let frame =
-                            image::io::Reader::open(image_base.join(format!("{:0>6}.jpg", frame)))?
-                                .decode()?
-                                .to_rgb8();
+                let data = frame_mot_detections
+                    .iter()
+                    .flat_map(|(frame_index, mot_detections)| {
+                        println!("{}: {}", sequence, frame_index);
 
-                        mot_detections
-                            .iter()
+                        let frame = image::io::Reader::open(
+                            image_base.join(format!("{:0>6}.jpg", frame_index)),
+                        )?
+                        .decode()?
+                        .to_rgb8();
+
+                        Ok(mot_detections
+                            .par_iter()
                             .map(|mot_detection| {
                                 let detection = imageops::crop_imm(
                                     &frame,
@@ -147,33 +181,64 @@ fn main() -> Result<()> {
                                 .to_image();
                                 let detection = imageops::resize(
                                     &detection,
-                                    64,
-                                    128,
+                                    input_width as u32,
+                                    input_height as u32,
                                     imageops::FilterType::Triangle,
                                 );
 
                                 let detection_tensor: Tensor =
                                     tract_ndarray::Array4::from_shape_fn(
-                                        (1, 3, 128, 64),
+                                        (1, 3, input_height, input_width),
                                         |(_, c, y, x)| detection[(x as _, y as _)][c] as f32,
                                     )
-                                    .permuted_axes([0, 2, 3, 1])
                                     .into();
 
                                 let results =
                                     feature_session.run(tvec!(detection_tensor.into()))?;
-                                let results =
-                                    results.first().unwrap().to_array_view::<f32>().unwrap();
 
-                                println!("{:?}", results);
+                                let base = vec![
+                                    *frame_index as f64,
+                                    mot_detection.id as f64,
+                                    mot_detection.bb_left as f64,
+                                    mot_detection.bb_top as f64,
+                                    mot_detection.bb_width as f64,
+                                    mot_detection.bb_height as f64,
+                                    mot_detection.conf as f64,
+                                    mot_detection.x as f64,
+                                    mot_detection.y as f64,
+                                    mot_detection.z as f64,
+                                ];
 
-                                Ok(())
+                                let feature_vector = results
+                                    .first()
+                                    .unwrap()
+                                    .to_array_view::<f32>()
+                                    .unwrap()
+                                    .as_standard_layout()
+                                    .as_slice()
+                                    .unwrap()
+                                    .iter()
+                                    .map(|v| *v as f64)
+                                    .collect::<Vec<_>>();
+
+                                Ok([base, feature_vector].concat())
                             })
-                            .collect::<Result<Vec<_>>>()?;
-
-                        Ok(())
+                            .collect::<Result<Vec<_>>>()?)
                     })
-                    .collect::<Result<Vec<_>>>()?;
+                    .flatten()
+                    .flatten()
+                    .collect::<Vec<_>>();
+
+                let file = std::io::BufWriter::new(File::create(
+                    output_dir.join(format!("./{sequence}.npy")),
+                )?);
+                let mut writer = npyz::WriteOptions::<f64>::new()
+                    .default_dtype()
+                    .shape(&[num_detections as u64, 10 + feature_length as u64])
+                    .writer(file)
+                    .begin_nd()?;
+                writer.extend(data)?;
+                writer.finish()?;
             }
         }
         Commands::Evaluate {

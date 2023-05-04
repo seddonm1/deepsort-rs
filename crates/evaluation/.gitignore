@@ -3,3 +3,4 @@
 TrackEval/data
 out
 *.onnx
+resources
