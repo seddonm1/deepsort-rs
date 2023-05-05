@@ -98,12 +98,12 @@ fn calculate_crop_box(
         // otherwise calculate scaling on the longer axis
         let scale = (target_width as f32 / source_width).min(target_height as f32 / source_height);
 
-        let scaled_width = (source_width * scale) as u32;
-        let scaled_height = (source_height * scale) as u32;
+        let scaled_width = (source_width * scale).floor() as u32;
+        let scaled_height = (source_height * scale).floor() as u32;
 
         Some(fast_image_resize::CropBox {
-            left: ((target_width - scaled_width) as f32 / 2.0) as u32,
-            top: ((target_height - scaled_height) as f32 / 2.0) as u32,
+            left: ((target_width - scaled_width) as f32 / 2.0).floor() as u32,
+            top: ((target_height - scaled_height) as f32 / 2.0).floor() as u32,
             width: NonZeroU32::new(scaled_width).unwrap(),
             height: NonZeroU32::new(scaled_height).unwrap(),
         })
@@ -173,6 +173,15 @@ mod test {
                 maintain_aspect_ratio: true,
                 expected_x_pad: None,
                 expected_y_pad: Some(12),
+            },
+            Case {
+                source_width: 640,
+                source_height: 480,
+                target_width: 640,
+                target_height: 640,
+                maintain_aspect_ratio: true,
+                expected_x_pad: None,
+                expected_y_pad: Some(80),
             },
         ];
 

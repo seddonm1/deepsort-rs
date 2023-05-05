@@ -1,22 +1,22 @@
-// mod utils;
+mod utils;
 use anyhow::{Ok, Result};
 use clap::{Parser, Subcommand};
-use deepsort_rs::{Detection, NearestNeighborDistanceMetric, Tracker};
-use image::imageops;
+use deepsort_rs::{BoundingBox, Detection, NearestNeighborDistanceMetric, Tracker};
+use image::{imageops, ImageBuffer, Rgb};
 use indexmap::IndexMap;
 use npyz::WriterBuilder;
 use rayon::prelude::*;
+use serde::Deserialize;
 use std::{
     fs::{File, OpenOptions},
     io::Write,
+    num::NonZeroU32,
     path::PathBuf,
 };
-use tract_ndarray::{s, ShapeBuilder};
+use tract_itertools::Itertools;
+use tract_ndarray::{s, Array, ShapeBuilder};
 use tract_onnx::prelude::*;
-
-// use utils::*;
-
-use serde::Deserialize;
+use utils::{frame_processing, image_resize};
 
 #[derive(Clone, Debug, Deserialize)]
 #[allow(dead_code)]
@@ -44,7 +44,30 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Commands {
-    /// Clones repos
+    /// Run object detection against the input files
+    #[command(arg_required_else_help = true)]
+    Detect {
+        /// The path of the model to run
+        #[arg(long)]
+        model: PathBuf,
+
+        /// The path of the mot groundtruth
+        #[arg(long)]
+        mot_dir: PathBuf,
+
+        /// The maximum number of output boxes per class
+        #[arg(short, long, default_value_t = NonZeroU32::new(50).unwrap())]
+        max_output_boxes_per_class: NonZeroU32,
+
+        /// The threshold for grouping detected objects
+        #[arg(short, long, default_value_t = 0.5)]
+        iou_threshold: f32,
+
+        /// The score threshold for detection
+        #[arg(short, long, default_value_t = 0.5)]
+        score_threshold: f32,
+    },
+    /// Generate features and export to numpy
     #[command(arg_required_else_help = true)]
     Generate {
         /// The path of the model to run
@@ -59,6 +82,7 @@ enum Commands {
         #[arg(long)]
         output_dir: PathBuf,
     },
+    /// Load numpy, run tracking and produce MOT Challenge predictions
     #[command(arg_required_else_help = true)]
     Evaluate {
         /// Path to detections.
@@ -90,18 +114,20 @@ enum Commands {
 fn main() -> Result<()> {
     let args = Cli::parse();
     match args.command {
-        Commands::Generate {
+        Commands::Detect {
             model,
             mot_dir,
-            output_dir,
+            max_output_boxes_per_class,
+            iou_threshold,
+            score_threshold,
         } => {
-            let feature_session = tract_onnx::onnx()
+            let session = tract_onnx::onnx()
                 .model_for_path(model)?
                 .with_output_fact(0, Default::default())?
                 .into_optimized()?
                 .into_runnable()?;
 
-            let input_shapes = feature_session
+            let input_shapes = session
                 .model
                 .input_fact(0)?
                 .shape
@@ -111,7 +137,204 @@ fn main() -> Result<()> {
             let input_width = *input_shapes.get(3).unwrap() as usize;
             let input_height = *input_shapes.get(2).unwrap() as usize;
 
-            let output_shapes = feature_session
+            let max_output_boxes_per_class_tensor: Tensor =
+                Array::from_elem(1, max_output_boxes_per_class.get() as i64)
+                    .into_shape(vec![1])?
+                    .into();
+            let iou_threshold_tensor: Tensor = Array::from_elem(1, iou_threshold)
+                .into_shape(vec![1])?
+                .into();
+            let score_threshold_tensor: Tensor = Array::from_elem(1, score_threshold)
+                .into_shape(vec![1])?
+                .into();
+
+            let sequence_img_paths: Vec<PathBuf> =
+                glob::glob(&format!("{}/*/img1", mot_dir.to_string_lossy()))
+                    .unwrap()
+                    .filter_map(|path| path.ok())
+                    .collect::<Vec<_>>();
+
+            sequence_img_paths
+                .iter()
+                .try_for_each(|sequence_img_path| {
+                    println!("{}", sequence_img_path.parent().unwrap().to_string_lossy());
+
+                    let imgs =
+                        glob::glob(&format!("{}/*.jpg", sequence_img_path.to_string_lossy()))
+                            .unwrap()
+                            .filter_map(|path| path.ok())
+                            .collect::<Vec<_>>();
+
+                    let detections = imgs
+                        .into_iter()
+                        .chunks(num_cpus::get())
+                        .into_iter()
+                        .map(|chunk| {
+                            let chunk_paths = chunk.collect::<Vec<_>>();
+                            Ok(chunk_paths
+                                .par_iter()
+                                .flat_map(|path| {
+                                    let frame = image::io::Reader::open(path)
+                                        .unwrap()
+                                        .decode()
+                                        .unwrap()
+                                        .to_rgb8();
+
+                                    let resized = image_resize::resize_image(
+                                        &mut frame.to_vec(),
+                                        NonZeroU32::new(frame.width()).unwrap(),
+                                        NonZeroU32::new(frame.height()).unwrap(),
+                                        NonZeroU32::new(input_width as u32).unwrap(),
+                                        NonZeroU32::new(input_height as u32).unwrap(),
+                                        true,
+                                        image_resize::Interpolation::Bilinear,
+                                    )
+                                    .unwrap();
+
+                                    let resized = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(
+                                        input_width as u32,
+                                        input_height as u32,
+                                        resized,
+                                    )
+                                    .unwrap();
+
+                                    let frame_tensor: Tensor =
+                                        tract_ndarray::Array4::from_shape_fn(
+                                            (1, 3, input_height, input_width),
+                                            |(_, c, y, x)| resized[(x as _, y as _)][c] as f32,
+                                        )
+                                        .into();
+
+                                    let results = session
+                                        .run(tvec!(
+                                            frame_tensor.into(),
+                                            max_output_boxes_per_class_tensor.clone().into(),
+                                            iou_threshold_tensor.clone().into(),
+                                            score_threshold_tensor.clone().into()
+                                        ))
+                                        .unwrap();
+
+                                    let results =
+                                        results.first().unwrap().to_array_view::<f32>().unwrap();
+                                    results
+                                        .outer_iter()
+                                        .filter_map(|output| {
+                                            let class_index = output[5] as usize;
+                                            let confidence = output[6];
+                                            if class_index == 0 {
+                                                let (x0, y0) = frame_processing::translate(
+                                                    output[1],
+                                                    output[2],
+                                                    input_width as u32,
+                                                    input_height as u32,
+                                                    frame.width(),
+                                                    frame.height(),
+                                                    true,
+                                                );
+                                                let (x1, y1) = frame_processing::translate(
+                                                    output[3],
+                                                    output[4],
+                                                    input_width as u32,
+                                                    input_height as u32,
+                                                    frame.width(),
+                                                    frame.height(),
+                                                    true,
+                                                );
+
+                                                let x0 = x0.clamp(0.0, frame.width() as f32);
+                                                let y0 = y0.clamp(0.0, frame.height() as f32);
+                                                let x1 = x1.clamp(0.0, frame.width() as f32);
+                                                let y1 = y1.clamp(0.0, frame.height() as f32);
+
+                                                Some((
+                                                    path.to_owned(),
+                                                    Detection::new(
+                                                        None,
+                                                        BoundingBox::new(x0, y0, x1 - x0, y1 - y0),
+                                                        confidence,
+                                                        None,
+                                                        None,
+                                                        None,
+                                                    ),
+                                                ))
+                                            } else {
+                                                None
+                                            }
+                                        })
+                                        .collect::<Vec<_>>()
+                                })
+                                .collect::<Vec<_>>())
+                        })
+                        .collect::<Result<Vec<_>>>()?
+                        .into_iter()
+                        .flatten()
+                        .collect::<Vec<_>>();
+
+                    let output_dir = mot_dir
+                        .join(
+                            &*sequence_img_path
+                                .parent()
+                                .unwrap()
+                                .file_name()
+                                .unwrap()
+                                .to_string_lossy(),
+                        )
+                        .join("det");
+                    std::fs::create_dir_all(&output_dir)?;
+                    let mut output_file = OpenOptions::new()
+                        .write(true)
+                        .truncate(true)
+                        .create(true)
+                        .open(output_dir.join("vc_det.txt"))?;
+
+                    detections.iter().try_for_each(|(path, detection)| {
+                        // output format
+                        // <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <conf>, <x>, <y>, <z>
+                        // 1,0.0,102.3751449584961,547.8447875976561,83.81769561767578,250.82427978515625,1,-1,-1,-1
+                        output_file.write_all(
+                            format!(
+                                "{},-1,{:.3},{:.3},{:.3},{:.3},{:.3},-1,-1,-1\n",
+                                path.file_stem()
+                                    .unwrap()
+                                    .to_string_lossy()
+                                    .parse::<usize>()?,
+                                detection.bbox().x(),
+                                detection.bbox().y(),
+                                detection.bbox().width(),
+                                detection.bbox().height(),
+                                detection.confidence()
+                            )
+                            .as_bytes(),
+                        )?;
+
+                        Ok(())
+                    })?;
+
+                    Ok(())
+                })?;
+        }
+        Commands::Generate {
+            model,
+            mot_dir,
+            output_dir,
+        } => {
+            let session = tract_onnx::onnx()
+                .model_for_path(model)?
+                .with_output_fact(0, Default::default())?
+                .into_optimized()?
+                .into_runnable()?;
+
+            let input_shapes = session
+                .model
+                .input_fact(0)?
+                .shape
+                .iter()
+                .map(|dim| Ok(dim.to_i64()?))
+                .collect::<Result<Vec<_>>>()?;
+            let input_width = *input_shapes.get(3).unwrap() as usize;
+            let input_height = *input_shapes.get(2).unwrap() as usize;
+
+            let output_shapes = session
                 .model
                 .output_fact(0)?
                 .shape
@@ -120,15 +343,12 @@ fn main() -> Result<()> {
                 .collect::<Result<Vec<_>>>()?;
             let feature_length = *output_shapes.get(1).unwrap() as usize;
 
-            let dets = glob::glob(&format!(
-                "{}/*/det/deepsort_det.txt",
-                mot_dir.to_string_lossy()
-            ))
-            .unwrap()
-            .filter_map(|path| path.ok())
-            .collect::<Vec<_>>();
+            let dets = glob::glob(&format!("{}/*/det/vc_det.txt", mot_dir.to_string_lossy()))
+                .unwrap()
+                .filter_map(|path| path.ok())
+                .collect::<Vec<_>>();
 
-            for det in dets {
+            dets.iter().try_for_each(|det| {
                 println!("{:?}", det);
                 let sequence_base = det.parent().unwrap().parent().unwrap();
                 let image_base = sequence_base.join("img1");
@@ -193,8 +413,7 @@ fn main() -> Result<()> {
                                     )
                                     .into();
 
-                                let results =
-                                    feature_session.run(tvec!(detection_tensor.into()))?;
+                                let results = session.run(tvec!(detection_tensor.into()))?;
 
                                 let base = vec![
                                     *frame_index as f64,
@@ -238,8 +457,8 @@ fn main() -> Result<()> {
                     .writer(file)
                     .begin_nd()?;
                 writer.extend(data)?;
-                writer.finish()?;
-            }
+                Ok(writer.finish()?)
+            })?;
         }
         Commands::Evaluate {
             detection_dir,
@@ -254,7 +473,7 @@ fn main() -> Result<()> {
                 .filter_map(|path| path.ok())
                 .collect::<Vec<_>>();
 
-            for npy_path in npy_paths {
+            npy_paths.iter().try_for_each(|npy_path| {
                 println!("{:?}", npy_path);
                 let mut tracker = Tracker::default();
                 tracker.with_nn_metric(
@@ -353,240 +572,18 @@ fn main() -> Result<()> {
                             })?;
 
                         Ok(())
-                    })?;
-            }
+                    })
+            })?;
         }
     }
-
-    // let font = Vec::from(include_bytes!("../DejaVuSans.ttf") as &[u8]);
-    // let font = Font::try_from_vec(font).unwrap();
-
-    // let mut tracker = Tracker::default();
-    // tracker.with_nn_metric(
-    //     NearestNeighborDistanceMetric::default()
-    //         .with_budget(30)
-    //         .to_owned(),
-    // );
-
-    // let feature_session = tract_onnx::onnx()
-    //     .model_for_path("osnet_ain_x1_0_msmt17_256x128_amsgrad_ep50_lr0.0015_coslr_b64_fb10_softmax_labsmth_flip_jitter.onnx")?
-    //     .with_output_fact(0, Default::default())?
-    //     .into_optimized()?
-    //     .into_runnable()?;
-
-    // let files = glob::glob(&args.input)
-    //     .unwrap()
-    //     .filter_map(|path| path.ok())
-    //     .collect::<Vec<_>>();
-
-    // files
-    //     .iter()
-    //     .chunks(num_cpus::get())
-    //     .into_iter()
-    //     .try_for_each(|chunk| {
-    //         let chunk_paths = chunk.collect::<Vec<_>>();
-    //         let results = chunk_paths
-    //             .par_iter()
-    //             .flat_map(|path| {
-    //                 let frame = image::io::Reader::open(path)
-    //                     .unwrap()
-    //                     .decode()
-    //                     .unwrap()
-    //                     .to_rgb8();
-
-    //                 let resized = image_resize::resize_image(
-    //                     &mut frame.to_vec(),
-    //                     NonZeroU32::new(frame.width()).unwrap(),
-    //                     NonZeroU32::new(frame.height()).unwrap(),
-    //                     NonZeroU32::new(MODEL_WIDTH).unwrap(),
-    //                     NonZeroU32::new(MODEL_HEIGHT).unwrap(),
-    //                     true,
-    //                     image_resize::Interpolation::Bilinear,
-    //                 )
-    //                 .unwrap();
-
-    //                 let resized = ImageBuffer::<Rgb<u8>, Vec<u8>>::from_vec(
-    //                     MODEL_WIDTH,
-    //                     MODEL_HEIGHT,
-    //                     resized,
-    //                 )
-    //                 .unwrap();
-
-    //                 let frame_tensor: Tensor = tract_ndarray::Array4::from_shape_fn(
-    //                     (1, 3, MODEL_HEIGHT as usize, MODEL_WIDTH as usize),
-    //                     |(_, c, y, x)| resized[(x as _, y as _)][c] as f32,
-    //                 )
-    //                 .into();
-
-    //                 let results = inference_session
-    //                     .run(tvec!(
-    //                         frame_tensor.into(),
-    //                         max_output_boxes_per_class_tensor.clone().into(),
-    //                         iou_threshold_tensor.clone().into(),
-    //                         score_threshold_tensor.clone().into()
-    //                     ))
-    //                     .unwrap();
-
-    //                 let results = results.first().unwrap().to_array_view::<f32>().unwrap();
-    //                 results
-    //                     .outer_iter()
-    //                     .filter_map(|output| {
-    //                         let class_index = output[5] as usize;
-    //                         let confidence = output[6];
-    //                         if class_index == 0 {
-    //                             let (x0, y0) = frame_processing::translate(
-    //                                 output[1],
-    //                                 output[2],
-    //                                 MODEL_WIDTH,
-    //                                 MODEL_HEIGHT,
-    //                                 frame.width(),
-    //                                 frame.height(),
-    //                                 true,
-    //                             );
-    //                             let (x1, y1) = frame_processing::translate(
-    //                                 output[3],
-    //                                 output[4],
-    //                                 MODEL_WIDTH,
-    //                                 MODEL_HEIGHT,
-    //                                 frame.width(),
-    //                                 frame.height(),
-    //                                 true,
-    //                             );
-
-    //                             let x0 = x0.clamp(0.0, frame.width() as f32);
-    //                             let y0 = y0.clamp(0.0, frame.height() as f32);
-    //                             let x1 = x1.clamp(0.0, frame.width() as f32);
-    //                             let y1 = y1.clamp(0.0, frame.height() as f32);
-
-    //                             let feature_vector = if confidence < args.feature_threshold {
-    //                                 None
-    //                             } else {
-    //                                 let person = imageops::crop_imm(
-    //                                     &frame,
-    //                                     x0 as u32,
-    //                                     y0 as u32,
-    //                                     (x1 - x0) as u32,
-    //                                     (y1 - y0) as u32,
-    //                                 )
-    //                                 .to_image();
-    //                                 let person = imageops::resize(
-    //                                     &person,
-    //                                     128,
-    //                                     256,
-    //                                     imageops::FilterType::Nearest,
-    //                                 );
-
-    //                                 let feature_tensor: Tensor =
-    //                                     tract_ndarray::Array4::from_shape_fn(
-    //                                         (1, 3, 256, 128),
-    //                                         |(_, c, y, x)| person[(x as _, y as _)][c] as f32,
-    //                                     )
-    //                                     .into();
-
-    //                                 let results =
-    //                                     feature_session.run(tvec!(feature_tensor.into())).unwrap();
-
-    //                                 Some(
-    //                                     results
-    //                                         .first()
-    //                                         .unwrap()
-    //                                         .to_array_view::<f32>()
-    //                                         .unwrap()
-    //                                         .as_slice()
-    //                                         .unwrap()
-    //                                         .to_vec(),
-    //                                 )
-    //                             };
-
-    //                             Some((
-    //                                 path.to_owned(),
-    //                                 Detection::new(
-    //                                     None,
-    //                                     BoundingBox::new(x0, y0, x1 - x0, y1 - y0),
-    //                                     confidence,
-    //                                     None,
-    //                                     None,
-    //                                     feature_vector,
-    //                                 ),
-    //                             ))
-    //                         } else {
-    //                             None
-    //                         }
-    //                     })
-    //                     .collect::<Vec<_>>()
-    //             })
-    //             .collect::<Vec<_>>();
-
-    //         let mut frame_results = IndexMap::<PathBuf, Vec<Detection>>::new();
-    //         results.into_iter().for_each(|(path, detection)| {
-    //             frame_results
-    //                 .entry(path.to_path_buf())
-    //                 .and_modify(|detections| detections.push(detection.clone()))
-    //                 .or_insert(vec![detection]);
-    //         });
-
-    //         frame_results.iter().try_for_each(|(path, detections)| {
-    //             println!("{}", path.to_string_lossy());
-
-    //             tracker.predict();
-    //             tracker.update(detections)?;
-
-    //             let frame_index = path.file_stem().unwrap().to_string_lossy().parse::<u32>()?;
-    //             // write the tracker evaluation file
-    //             let output_file = format!(
-    //                 "TrackEval/data/trackers/mot_challenge/MOT17-train/{TRACKER_NAME}/data/{}.txt",
-    //                 path.parent()
-    //                     .unwrap()
-    //                     .parent()
-    //                     .unwrap()
-    //                     .file_name()
-    //                     .unwrap()
-    //                     .to_string_lossy()
-    //             );
-    //             let output_path = Path::new(&output_file);
-    //             std::fs::create_dir_all(output_path.parent().unwrap())?;
-    //             let mut file = OpenOptions::new()
-    //                 .append(true)
-    //                 .create(true)
-    //                 .open(output_file)?;
-
-    //             let tracks = tracker
-    //                 .tracks()
-    //                 .iter()
-    //                 .filter(|track| track.is_confirmed())
-    //                 .collect::<Vec<_>>();
-
-    //             tracks.iter().try_for_each(|track| {
-    //                 // output format
-    //                 // <frame>, <id>, <bb_left>, <bb_top>, <bb_width>, <bb_height>, <conf>, <x>, <y>, <z>
-    //                 // 1,0.0,102.3751449584961,547.8447875976561,83.81769561767578,250.82427978515625,1,-1,-1,-1
-    //                 file.write_all(
-    //                     format!(
-    //                         "{frame_index},{:.1},{:.3},{:.3},{:.3},{:.3},1,-1,-1,-1\n",
-    //                         track.track_id() as f32,
-    //                         track.bbox().x(),
-    //                         track.bbox().y(),
-    //                         track.bbox().width(),
-    //                         track.bbox().height()
-    //                     )
-    //                     .as_bytes(),
-    //                 )
-    //             })?;
-
-    //             if args.write_images {
-    //                 write_images(path, tracks, &font)?
-    //             };
-
-    //             Ok(())
-    //         })?;
-
-    //         Ok(())
-    //     })?;
 
     Ok(())
 }
 
 // fn write_images(path: &PathBuf, tracks: Vec<&Track>, font: &Font) -> Result<()> {
+
+// let font = Vec::from(include_bytes!("../DejaVuSans.ttf") as &[u8]);
+// let font = Font::try_from_vec(font).unwrap();
 //     let mut frame = image::io::Reader::open(path)
 //         .unwrap()
 //         .decode()
