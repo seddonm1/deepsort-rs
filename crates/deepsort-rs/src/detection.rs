@@ -75,4 +75,9 @@ impl Detection {
     pub fn feature(&self) -> &Option<Array1<f32>> {
         &self.feature
     }
+
+    /// Returns the feature array of the detection
+    pub fn feature_mut(&mut self) -> &mut Option<Array1<f32>> {
+        &mut self.feature
+    }
 }

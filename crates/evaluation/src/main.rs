@@ -78,6 +78,10 @@ enum Commands {
         #[arg(long)]
         mot_dir: PathBuf,
 
+        /// The pattern to match for detection text files
+        #[arg(long)]
+        pattern: String,
+
         /// The path of the output files
         #[arg(long)]
         output_dir: PathBuf,
@@ -96,6 +100,10 @@ enum Commands {
         /// Detection confidence threshold. Disregard all detections that have a confidence lower than this value.
         #[arg(long, default_value_t = 0.0)]
         min_confidence: f32,
+
+        /// Detection confidence threshold. Do not use any features lower than this confidence in tracking.
+        #[arg(long, default_value_t = 0.0)]
+        min_feature_confidence: f32,
 
         /// Threshold on the detection bounding box height. Detections with height smaller than this value are disregarded.
         #[arg(long, default_value_t = 0)]
@@ -316,6 +324,7 @@ fn main() -> Result<()> {
         Commands::Generate {
             model,
             mot_dir,
+            pattern,
             output_dir,
         } => {
             let session = tract_onnx::onnx()
@@ -343,7 +352,7 @@ fn main() -> Result<()> {
                 .collect::<Result<Vec<_>>>()?;
             let feature_length = *output_shapes.get(1).unwrap() as usize;
 
-            let dets = glob::glob(&format!("{}/*/det/vc_det.txt", mot_dir.to_string_lossy()))
+            let dets = glob::glob(&format!("{}/*/det/{}", mot_dir.to_string_lossy(), pattern))
                 .unwrap()
                 .filter_map(|path| path.ok())
                 .collect::<Vec<_>>();
@@ -409,7 +418,12 @@ fn main() -> Result<()> {
                                 let detection_tensor: Tensor =
                                     tract_ndarray::Array4::from_shape_fn(
                                         (1, 3, input_height, input_width),
-                                        |(_, c, y, x)| detection[(x as _, y as _)][c] as f32,
+                                        |(_, c, y, x)| {
+                                            let mean = [0.485, 0.456, 0.406][c];
+                                            let std = [0.229, 0.224, 0.225][c];
+                                            (detection[(x as _, y as _)][c] as f32 / 255.0 - mean)
+                                                / std
+                                        },
                                     )
                                     .into();
 
@@ -464,6 +478,7 @@ fn main() -> Result<()> {
             detection_dir,
             output_dir,
             min_confidence,
+            min_feature_confidence,
             min_detection_height: _,
             max_cosine_distance,
             nn_budget,
@@ -548,6 +563,13 @@ fn main() -> Result<()> {
                         let detections = detections
                             .into_iter()
                             .filter(|detection| detection.confidence() > min_confidence)
+                            .map(|mut detection| {
+                                if detection.confidence() < min_feature_confidence {
+                                    *detection.feature_mut() = None;
+                                };
+
+                                detection
+                            })
                             .collect::<Vec<_>>();
 
                         tracker.predict();

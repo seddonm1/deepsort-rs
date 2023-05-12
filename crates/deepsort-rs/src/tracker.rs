@@ -55,28 +55,38 @@ pub struct Tracker {
     tracks: Vec<Track>,
     /// Used to allocate identifiers to new tracks.
     next_id: usize,
+    /// Confidence threshold for performing primary or secondary matching.
+    track_threshold: f32,
 }
 
 impl Default for Tracker {
     fn default() -> Self {
-        Self::new(NearestNeighborDistanceMetric::default(), None, None, None)
+        Self::new(
+            NearestNeighborDistanceMetric::default(),
+            None,
+            None,
+            None,
+            None,
+        )
     }
 }
 
 impl Tracker {
     /// Returns a new Tracker
     ///
-    /// # Parameters
+    /// # Arguments
     ///
-    /// - `nn_metric`: A distance metric for measurement-to-track association.
-    /// - `max_iou_distance`: Gating threshold for intersection over union. Associations with cost larger than this value are disregarded. Default `0.7`.
-    /// - `max_age`: Maximum number of missed misses before a track is deleted. Default `30`.
-    /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames. Default `3`.
+    /// * `nn_metric`: A distance metric for measurement-to-track association.
+    /// * `max_iou_distance`: Gating threshold for intersection over union. Associations with cost larger than this value are disregarded. Default `0.7`.
+    /// * `max_age`: Maximum number of missed misses before a track is deleted. Default `30`.
+    /// * `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames. Default `3`.
+    /// * `track_threshold`: Confidence threshold for performing primary or secondary matching. Default `0.6`.
     pub fn new(
         nn_metric: NearestNeighborDistanceMetric,
         max_iou_distance: Option<f32>,
         max_age: Option<usize>,
         n_init: Option<usize>,
+        track_threshold: Option<f32>,
     ) -> Tracker {
         Tracker {
             nn_metric,
@@ -86,6 +96,7 @@ impl Tracker {
             kf: KalmanFilter::default(),
             tracks: vec![],
             next_id: 1,
+            track_threshold: track_threshold.unwrap_or(0.6),
         }
     }
 
@@ -281,6 +292,92 @@ impl Tracker {
             unmatched_detections,
         ))
     }
+
+    // /// The matching cascade.
+    // ///
+    // /// It works in two stages:
+    // /// - first run the nn_metric matching to try to associate matches using the feature vector
+    // /// - with the remaining tracks attempt to match using iou
+    // #[allow(clippy::type_complexity)]
+    // fn matching_cascade(
+    //     &self,
+    //     detections: &[Detection],
+    // ) -> Result<(Vec<Match>, Vec<Match>, Vec<usize>, Vec<usize>)> {
+    //     // Split track set into confirmed and unconfirmed tracks.
+    //     let mut confirmed_tracks = Vec::new();
+    //     let mut unconfirmed_tracks = Vec::new();
+    //     self.tracks.iter().enumerate().for_each(|(i, track)| {
+    //         if track.is_confirmed() {
+    //             confirmed_tracks.push(i);
+    //         } else {
+    //             unconfirmed_tracks.push(i);
+    //         }
+    //     });
+
+    //     let mut high_detections = Vec::new();
+    //     let mut low_detections = Vec::new();
+    //     detections.iter().enumerate().for_each(|(i, detection)| {
+    //         if detection.confidence() > self.track_threshold {
+    //             high_detections.push(i);
+    //         } else {
+    //             low_detections.push(i);
+    //         }
+    //     });
+
+    //     // Associate only confirmed tracks using appearance features.
+    //     let (features_matches, features_unmatched_tracks, unmatched_detections) =
+    //         linear_assignment::matching_cascade(
+    //             self.nn_metric.distance_metric(&self.kf),
+    //             self.nn_metric.matching_threshold(),
+    //             self.max_age,
+    //             &self.tracks,
+    //             detections,
+    //             Some(confirmed_tracks),
+    //             Some(high_detections),
+    //         )?;
+
+    //     // partition the unmatched tracks into recent (time_since_update == 1) and older
+    //     let (features_unmatched_tracks_recent, features_unmatched_tracks_older): (
+    //         Vec<usize>,
+    //         Vec<usize>,
+    //     ) = features_unmatched_tracks
+    //         .into_iter()
+    //         .partition(|k| self.tracks.get(*k).unwrap().time_since_update() == 1);
+
+    //     // Associate recent tracks together with unconfirmed tracks using IOU.
+    //     let iou_track_candidates = [unconfirmed_tracks, features_unmatched_tracks_recent].concat();
+    //     let (high_iou_matches, iou_unmatched_tracks, unmatched_high_detections) =
+    //         linear_assignment::min_cost_matching(
+    //             iou_matching::intersection_over_union_cost(),
+    //             self.max_iou_distance,
+    //             &self.tracks,
+    //             detections,
+    //             Some(iou_track_candidates),
+    //             Some(unmatched_detections),
+    //         )?;
+
+    //     // Associate recent tracks together with unconfirmed tracks using IOU.
+    //     let iou_track_candidates = iou_unmatched_tracks;
+    //     let (low_iou_matches, iou_unmatched_tracks, unmatched_low_detections) =
+    //         linear_assignment::min_cost_matching(
+    //             iou_matching::intersection_over_union_cost(),
+    //             self.max_iou_distance,
+    //             &self.tracks,
+    //             detections,
+    //             Some(iou_track_candidates),
+    //             Some(low_detections),
+    //         )?;
+
+    //     let mut unmatched_tracks = [features_unmatched_tracks_older, iou_unmatched_tracks].concat();
+    //     unmatched_tracks.dedup();
+
+    //     Ok((
+    //         features_matches,
+    //         [high_iou_matches, low_iou_matches].concat(),
+    //         unmatched_tracks,
+    //         [unmatched_high_detections, unmatched_low_detections].concat(),
+    //     ))
+    // }
 
     fn initiate_track(&mut self, detection: Detection) {
         let (mean, covariance) = self.kf.initiate(detection.bbox());
