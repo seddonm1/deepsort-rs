@@ -157,7 +157,7 @@ def generate_detections(encoder, mot_dir, output_dir, detection_dir=None):
             for f in os.listdir(image_dir)}
 
         detection_file = os.path.join(
-            detection_dir, sequence, "det/det.txt")
+            detection_dir, sequence, "det/bytetrack.txt")
         detections_in = np.loadtxt(detection_file, delimiter=',')
         detections_out = []
 

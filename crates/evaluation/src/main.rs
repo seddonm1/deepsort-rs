@@ -405,9 +405,10 @@ fn main() -> Result<()> {
                                     mot_detection.bb_left as u32,
                                     mot_detection.bb_top as u32,
                                     mot_detection.bb_width as u32,
-                                    mot_detection.bb_top as u32,
+                                    mot_detection.bb_height as u32,
                                 )
                                 .to_image();
+
                                 let detection = imageops::resize(
                                     &detection,
                                     input_width as u32,
@@ -564,6 +565,7 @@ fn main() -> Result<()> {
                             .into_iter()
                             .filter(|detection| detection.confidence() > min_confidence)
                             .map(|mut detection| {
+                                // remove feature vector if below threshold (will become iou/sort tracking only)
                                 if detection.confidence() < min_feature_confidence {
                                     *detection.feature_mut() = None;
                                 };

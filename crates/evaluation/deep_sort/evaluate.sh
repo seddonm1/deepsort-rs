@@ -20,7 +20,7 @@ time python3 evaluate_motchallenge.py \
 time python3 evaluate_motchallenge.py \
 --mot_dir=../TrackEval/data/gt/mot_challenge/MOT17-train \
 --detection_dir=./resources/detections/MOT17-train \
---output=../TrackEval/data/trackers/mot_challenge/MOT17-train/deep_sort/data \
+--output=../TrackEval/data/trackers/mot_challenge/MOT17-train/deepsort-py/data \
 --min_confidence=0.3 \
 --min_detection_height=0 \
 --nms_max_overlap=1.0 \
@@ -29,7 +29,7 @@ time python3 evaluate_motchallenge.py \
 time python3 evaluate_motchallenge.py \
 --mot_dir=../TrackEval/data/gt/mot_challenge/MOT17-test \
 --detection_dir=./resources/detections/MOT17-test \
---output=../TrackEval/data/trackers/mot_challenge/MOT17-test/deep_sort/data \
+--output=../TrackEval/data/trackers/mot_challenge/MOT17-test/deepsort-py/data \
 --min_confidence=0.3 \
 --min_detection_height=0 \
 --nms_max_overlap=1.0 \

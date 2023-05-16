@@ -325,7 +325,7 @@ impl Tracker {
     //     });
 
     //     // Associate only confirmed tracks using appearance features.
-    //     let (features_matches, features_unmatched_tracks, unmatched_detections) =
+    //     let (features_matches, features_unmatched_tracks, features_unmatched_high_detections) =
     //         linear_assignment::matching_cascade(
     //             self.nn_metric.distance_metric(&self.kf),
     //             self.nn_metric.matching_threshold(),
@@ -353,7 +353,7 @@ impl Tracker {
     //             &self.tracks,
     //             detections,
     //             Some(iou_track_candidates),
-    //             Some(unmatched_detections),
+    //             Some(features_unmatched_high_detections),
     //         )?;
 
     //     // Associate recent tracks together with unconfirmed tracks using IOU.
