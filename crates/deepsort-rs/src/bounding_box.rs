@@ -27,10 +27,10 @@ impl BoundingBox {
     ///
     /// # Parameters
     ///
-    /// - `x`: Bounding box top.
-    /// - `y`: Bounding box left.
-    /// - `width`: Bounding box width.
-    /// - `height`: Bounding box height.
+    /// * `x`: Bounding box top.
+    /// * `y`: Bounding box left.
+    /// * `width`: Bounding box width.
+    /// * `height`: Bounding box height.
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> BoundingBox {
         BoundingBox {
             x,

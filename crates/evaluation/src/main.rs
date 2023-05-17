@@ -489,7 +489,7 @@ fn main() -> Result<()> {
                 .filter_map(|path| path.ok())
                 .collect::<Vec<_>>();
 
-            npy_paths.iter().try_for_each(|npy_path| {
+            npy_paths.par_iter().try_for_each(|npy_path| {
                 println!("{:?}", npy_path);
                 let mut tracker = Tracker::default();
                 tracker.with_nn_metric(

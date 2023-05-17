@@ -20,9 +20,9 @@ impl Match {
     ///
     /// # Parameters
     ///
-    /// - `track_idx`: The match track index.
-    /// - `detection_idx`: The match detection index.
-    /// - `distance`: Match strength.
+    /// * `track_idx`: The match track index.
+    /// * `detection_idx`: The match detection index.
+    /// * `distance`: Match strength.
     pub fn new(track_idx: usize, detection_idx: usize, distance: f32) -> Match {
         Match {
             track_idx,
@@ -57,13 +57,13 @@ impl PartialEq for Match {
 ///
 /// # Parameters
 ///
-/// - `distance_metric` : The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices.
+/// * `distance_metric` : The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices.
 ///   The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection_indices.
-/// - `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
-/// - `tracks`: A list of predicted tracks at the current time step.
-/// - `detections`: A list of detections at the current time step.
-/// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above).
-/// - `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above).
+/// * `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
+/// * `tracks`: A list of predicted tracks at the current time step.
+/// * `detections`: A list of detections at the current time step.
+/// * `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above).
+/// * `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above).
 ///
 /// # Returns
 ///
@@ -194,13 +194,13 @@ pub fn min_cost_matching(
 ///
 /// # Parameters
 ///
-/// - `distance_metric`: The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices. The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection indices.
-/// - `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
-/// - `cascade_depth`: The cascade depth, should be set to the maximum track age.
-/// - `tracks`: A list of predicted tracks at the current time step.
-/// - `detections`: A list of detections at the current time step.
-/// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above). Defaults to all tracks.
-/// - `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above). Defaults to all detections.
+/// * `distance_metric`: The distance metric is given a list of tracks and detections as well as a list of N track indices and M detection indices. The metric should return the NxM dimensional cost matrix, where element (i, j) is the association cost between the i-th track in the given track indices and the j-th detection in the given detection indices.
+/// * `max_distance`: Gating threshold. Associations with cost larger than this value are disregarded.
+/// * `cascade_depth`: The cascade depth, should be set to the maximum track age.
+/// * `tracks`: A list of predicted tracks at the current time step.
+/// * `detections`: A list of detections at the current time step.
+/// * `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above). Defaults to all tracks.
+/// * `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above). Defaults to all detections.
 ///
 /// # Returns
 ///
@@ -277,14 +277,14 @@ pub fn matching_cascade(
 ///
 /// # Parameters
 ///
-/// - `kf`: The Kalman filter.
-/// - `cost_matrix`: The NxM dimensional cost matrix, where N is the number of track indices and M is the number of detection indices, such that entry (i, j) is the association cost between `tracks[track_indices[i]]` and `detections[detection_indices[j]]`.
-/// - `tracks`: A list of predicted tracks at the current time step.
-/// - `detections`: A list of detections at the current time step.
-/// - `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above).
-/// - `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above).
-/// - `gated_cost`: Entries in the cost matrix corresponding to infeasible associations are set this value. Defaults to a very large value.
-/// - `only_position`: If true, only the x, y position of the state distribution is considered during gating. Defaults to false.
+/// * `kf`: The Kalman filter.
+/// * `cost_matrix`: The NxM dimensional cost matrix, where N is the number of track indices and M is the number of detection indices, such that entry (i, j) is the association cost between `tracks[track_indices[i]]` and `detections[detection_indices[j]]`.
+/// * `tracks`: A list of predicted tracks at the current time step.
+/// * `detections`: A list of detections at the current time step.
+/// * `track_indices`: List of track indices that maps rows in `cost_matrix` to tracks in `tracks` (see description above).
+/// * `detection_indices`: List of detection indices that maps columns in `cost_matrix` to detections in `detections` (see description above).
+/// * `gated_cost`: Entries in the cost matrix corresponding to infeasible associations are set this value. Defaults to a very large value.
+/// * `only_position`: If true, only the x, y position of the state distribution is considered during gating. Defaults to false.
 ///
 /// # Returns
 ///

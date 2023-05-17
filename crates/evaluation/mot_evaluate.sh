@@ -13,3 +13,4 @@ python3 TrackEval/scripts/run_mot_challenge.py \
 --BENCHMARK MOT17 \
 --SPLIT_TO_EVAL train \
 --METRICS HOTA CLEAR Identity
+python3 summary.py

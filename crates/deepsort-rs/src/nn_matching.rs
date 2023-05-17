@@ -14,8 +14,8 @@ pub enum Metric {
 ///
 /// # Parameters
 ///
-/// - `x`: A matrix of N non-normalized row-vectors (sample points).
-/// - `y`: A matrix of M non-normalized row-vectors (query points).
+/// * `x`: A matrix of N non-normalized row-vectors (sample points).
+/// * `y`: A matrix of M non-normalized row-vectors (query points).
 ///
 /// # Returns
 ///
@@ -35,8 +35,8 @@ fn cosine_distance(x: &Array2<f32>, y: &Array2<f32>) -> Array1<f32> {
 ///
 /// # Parameters
 ///
-/// - `x`: A matrix of N row-vectors (sample points).
-/// - `y`: A matrix of M row-vectors (query points).
+/// * `x`: A matrix of N row-vectors (sample points).
+/// * `y`: A matrix of M row-vectors (query points).
 ///
 /// # Returns
 ///
@@ -89,10 +89,10 @@ impl NearestNeighborDistanceMetric {
     ///
     /// # Parameters
     ///
-    /// - `metric`: Either `Metric::Euclidean` or `Metric::Cosine`.
-    /// - `matching_threshold`: The matching threshold. Samples with larger distance are considered an invalid match. Default `0.2`.
-    /// - `feature_length`: The feature vector length. Default `128`.
-    /// - `budget`: If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
+    /// * `metric`: Either `Metric::Euclidean` or `Metric::Cosine`.
+    /// * `matching_threshold`: The matching threshold. Samples with larger distance are considered an invalid match. Default `0.2`.
+    /// * `feature_length`: The feature vector length. Default `128`.
+    /// * `budget`: If not None, fix samples per class to at most this number. Removes the oldest samples when the budget is reached.
     pub fn new(
         metric: Option<Metric>,
         matching_threshold: Option<f32>,
@@ -138,9 +138,9 @@ impl NearestNeighborDistanceMetric {
     ///
     /// # Parameters
     ///
-    /// - `features`: An NxM matrix of N features of dimensionality M.
-    /// - `targets`: An integer array of associated target identities.
-    /// - `active_targets`: A list of targets that are currently present in the scene.
+    /// * `features`: An NxM matrix of N features of dimensionality M.
+    /// * `targets`: An integer array of associated target identities.
+    /// * `active_targets`: A list of targets that are currently present in the scene.
     pub fn partial_fit(
         &mut self,
         features: &Array2<f32>,
@@ -181,8 +181,8 @@ impl NearestNeighborDistanceMetric {
     ///
     /// # Parameters
     ///
-    /// - `features`: An NxM matrix of N features of dimensionality M.
-    /// - `targets`: A list of targets to match the given `features` against.
+    /// * `features`: An NxM matrix of N features of dimensionality M.
+    /// * `targets`: A list of targets to match the given `features` against.
     ///
     /// # Returns
     ///
@@ -217,7 +217,7 @@ impl NearestNeighborDistanceMetric {
     ///
     /// # Parameters
     ///
-    /// - `kf`: The Kalman filter.
+    /// * `kf`: The Kalman filter.
     ///
     /// # Returns
     ///

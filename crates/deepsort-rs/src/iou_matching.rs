@@ -7,8 +7,8 @@ use std::rc::Rc;
 ///
 /// # Parameters
 ///
-/// - `bbox`: A bounding box in format `(top left x, top left y, width, height)`.
-/// - `candidates`: A matrix of candidate bounding boxes (one per row) in the same format as `bbox`.
+/// * `bbox`: A bounding box in format `(top left x, top left y, width, height)`.
+/// * `candidates`: A matrix of candidate bounding boxes (one per row) in the same format as `bbox`.
 ///
 /// # Returns
 ///
@@ -42,10 +42,10 @@ fn intersection_over_union(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Arra
 ///
 /// # Parameters
 ///
-/// - `tracks`: A list of tracks.
-/// - `detections`: A list of detections.
-/// - `track_indices`: A list of indices to tracks that should be matched. Defaults to all `tracks`.
-/// - `detection_indices`: A list of indices to detections that should be matched. Defaults to all `detections`.
+/// * `tracks`: A list of tracks.
+/// * `detections`: A list of detections.
+/// * `track_indices`: A list of indices to tracks that should be matched. Defaults to all `tracks`.
+/// * `detection_indices`: A list of indices to detections that should be matched. Defaults to all `detections`.
 ///
 /// # Returns
 ///

@@ -16,8 +16,8 @@ pub enum TrackState {
 
 /// Enumeration type for the source of the match
 ///
-/// - `NearestNeighbor` means matched via the feature vector.
-/// - `IoU` means matched via intsection over union of KalmanFilter predicted location.
+/// * `NearestNeighbor` means matched via the feature vector.
+/// * `IoU` means matched via intsection over union of KalmanFilter predicted location.
 #[derive(Clone, Debug)]
 pub enum MatchSource {
     NearestNeighbor { detection: Detection, distance: f32 },
@@ -58,14 +58,14 @@ impl Track {
     ///
     /// # Parameters
     ///
-    /// - `mean`: Mean vector of the initial state distribution.
-    /// - `covariance`: Covariance matrix of the initial state distribution.
-    /// - `track_id`: A unique track identifier.
-    /// - `confidence`: A confidence score of the latest update.
-    /// - `class_id`: An optional class identifier.
-    /// - `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
-    /// - `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
-    /// - `features`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
+    /// * `mean`: Mean vector of the initial state distribution.
+    /// * `covariance`: Covariance matrix of the initial state distribution.
+    /// * `track_id`: A unique track identifier.
+    /// * `confidence`: A confidence score of the latest update.
+    /// * `class_id`: An optional class identifier.
+    /// * `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
+    /// * `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
+    /// * `features`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         mean: Array1<f32>,
@@ -155,7 +155,7 @@ impl Track {
     ///
     /// # Parameters
     ///
-    /// - `kf`: The Kalman filter.
+    /// * `kf`: The Kalman filter.
     pub fn predict(&mut self, kf: &KalmanFilter) {
         (self.mean, self.covariance) = kf.predict(&self.mean, &self.covariance);
         self.age += 1;
@@ -166,8 +166,8 @@ impl Track {
     ///
     /// # Parameters
     ///
-    /// - `kf`: The Kalman filter.
-    /// - `detection`: The associated detection.
+    /// * `kf`: The Kalman filter.
+    /// * `detection`: The associated detection.
     pub fn update(
         &mut self,
         kf: &KalmanFilter,

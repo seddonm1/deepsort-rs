@@ -81,7 +81,7 @@ impl KalmanFilter {
     ///
     /// # Arguments
     ///
-    /// - `bbox`: Bounding box object of the new measurement.
+    /// * `bbox`: Bounding box object of the new measurement.
     ///
     /// # Returns
     ///
@@ -115,8 +115,8 @@ impl KalmanFilter {
     ///
     /// # Arguments
     ///
-    /// - `mean`: The 8 dimensional mean vector of the object state at the previous time step.
-    /// - `covariance`: The 8x8 dimensional covariance matrix of the object state at the previous time step.
+    /// * `mean`: The 8 dimensional mean vector of the object state at the previous time step.
+    /// * `covariance`: The 8x8 dimensional covariance matrix of the object state at the previous time step.
     ///
     /// # Returns
     ///
@@ -160,8 +160,8 @@ impl KalmanFilter {
     ///
     /// # Arguments
     ///
-    /// - `mean`: The state's mean vector (8 dimensional array).
-    /// - `covariance`: The state's covariance matrix (8x8 dimensional).
+    /// * `mean`: The state's mean vector (8 dimensional array).
+    /// * `covariance`: The state's covariance matrix (8x8 dimensional).
     ///
     /// # Returns
     ///
@@ -192,9 +192,9 @@ impl KalmanFilter {
     ///
     /// # Arguments
     ///
-    /// - `mean`: The state's mean vector (8 dimensional array).
-    /// - `covariance`: The state's covariance matrix (8x8 dimensional).
-    /// - `measurement`: The 4 dimensional measurement vector (x, y, a, h), where (x, y) is the center position, a the aspect ratio, and h the height of the bounding box.
+    /// * `mean`: The state's mean vector (8 dimensional array).
+    /// * `covariance`: The state's covariance matrix (8x8 dimensional).
+    /// * `measurement`: The 4 dimensional measurement vector (x, y, a, h), where (x, y) is the center position, a the aspect ratio, and h the height of the bounding box.
     ///
     /// # Returns
     ///
@@ -229,9 +229,9 @@ impl KalmanFilter {
     ///
     /// # Parameters
     ///
-    /// - `mean`: Mean vector over the state distribution (8 dimensional).
-    /// - `covariance`: Covariance of the state distribution (8x8 dimensional).
-    /// - `measurements`: An Nx4 dimensional matrix of N measurements, each in format (x, y, a, h) where (x, y) is the bounding box center position, a the aspect ratio, and h the height.
+    /// * `mean`: Mean vector over the state distribution (8 dimensional).
+    /// * `covariance`: Covariance of the state distribution (8x8 dimensional).
+    /// * `measurements`: An Nx4 dimensional matrix of N measurements, each in format (x, y, a, h) where (x, y) is the bounding box center position, a the aspect ratio, and h the height.
     ///
     /// # Returns
     ///

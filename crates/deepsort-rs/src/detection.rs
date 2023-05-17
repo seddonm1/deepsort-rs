@@ -24,10 +24,10 @@ impl Detection {
     ///
     /// # Parameters
     ///
-    /// - `bbox`: A bounding box object.
-    /// - `confidence`: Detection confidence score.
-    /// - `class_id`: An optional class identifier.
-    /// - `feature`: A feature vector that describes the object contained in this image.
+    /// * `bbox`: A bounding box object.
+    /// * `confidence`: Detection confidence score.
+    /// * `class_id`: An optional class identifier.
+    /// * `feature`: A feature vector that describes the object contained in this image.
     pub fn new(
         id: Option<Uuid>,
         bbox: BoundingBox,
