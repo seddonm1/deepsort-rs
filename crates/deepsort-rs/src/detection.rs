@@ -1,9 +1,9 @@
 use crate::BoundingBox;
 use ndarray::*;
+use std::hash::{Hash, Hasher};
 use uuid::Uuid;
 
 /// Detection represents a bounding box detection in a single image.
-#[derive(Debug, Clone)]
 pub struct Detection {
     /// Unique detection identifier
     id: Uuid,
@@ -17,6 +17,32 @@ pub struct Detection {
     class_name: Option<String>,
     /// A feature vector that describes the object contained in this image.
     feature: Option<Array1<f32>>,
+}
+
+impl std::fmt::Debug for Detection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Detection")
+            .field("id", &self.id)
+            .field("bbox", &self.bbox)
+            .field("confidence", &self.confidence)
+            .field("class_id", &self.class_id)
+            .field("class_name", &self.class_name)
+            .finish()
+    }
+}
+
+impl PartialEq for Detection {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl Eq for Detection {}
+
+impl Hash for Detection {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state);
+    }
 }
 
 impl Detection {

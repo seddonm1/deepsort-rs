@@ -1,7 +1,7 @@
 mod utils;
 use anyhow::{Ok, Result};
 use clap::{Parser, Subcommand};
-use deepsort_rs::{BoundingBox, Detection, Tracker};
+use deepsort_rs::{BoundingBox, Detection, NearestNeighborDistanceMetric, Tracker};
 use image::{imageops, ImageBuffer, Rgb};
 use indexmap::IndexMap;
 use npyz::WriterBuilder;
@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
 };
 use tract_itertools::Itertools;
-use tract_ndarray::Array;
+use tract_ndarray::{s, Array, ShapeBuilder};
 use tract_onnx::prelude::*;
 use utils::{frame_processing, image_resize};
 
@@ -408,6 +408,7 @@ fn main() -> Result<()> {
                                     mot_detection.bb_height as u32,
                                 )
                                 .to_image();
+
                                 let detection = imageops::resize(
                                     &detection,
                                     input_width as u32,
@@ -483,68 +484,67 @@ fn main() -> Result<()> {
             max_cosine_distance,
             nn_budget,
         } => {
-            let paths = glob::glob(&format!("{}", detection_dir.to_string_lossy()))
+            let npy_paths = glob::glob(&format!("{}/*.npy", detection_dir.to_string_lossy()))
                 .unwrap()
                 .filter_map(|path| path.ok())
                 .collect::<Vec<_>>();
 
-            paths.par_iter().try_for_each(|path| {
-                println!("{:?}", path);
-
+            npy_paths.par_iter().try_for_each(|npy_path| {
+                println!("{:?}", npy_path);
                 let mut tracker = Tracker::default();
-                tracker.with_max_iou_distance(0.9);
-                tracker.with_max_age(30);
+                tracker.with_nn_metric(
+                    NearestNeighborDistanceMetric::default()
+                        .with_matching_threshold(max_cosine_distance)
+                        .with_budget(nn_budget)
+                        .to_owned(),
+                );
 
-                // same as bytetrack
-                // let scale = (800f32 / 1080f32).min(1440f32 / 1920f32);
-                let scale = 1.0;
+                let bytes = std::fs::read(npy_path.clone())?;
+                let npy = npyz::NpyFile::new(&bytes[..])?;
+                let shape = npy.shape().to_owned();
+                let order = npy.order();
 
-                let mut reader = csv::ReaderBuilder::new()
-                    .has_headers(false)
-                    .from_path(path.clone())?;
+                let data = npy
+                    .data::<f64>()?
+                    .map(|data| Ok(data?))
+                    .collect::<Result<Vec<f64>>>()?;
 
-                let detections = reader
-                    .deserialize::<MotDetection>()
-                    .map(|mot_detection| Ok(mot_detection?))
-                    .collect::<Result<Vec<_>>>()?
-                    .iter()
-                    .filter_map(|mot_detection| {
-                        if mot_detection.conf > min_confidence {
-                            Some((
-                                mot_detection.frame,
-                                deepsort_rs::Detection::new(
-                                    None,
-                                    deepsort_rs::BoundingBox::new(
-                                        mot_detection.bb_left / scale,
-                                        mot_detection.bb_top / scale,
-                                        mot_detection.bb_width / scale,
-                                        mot_detection.bb_height / scale,
-                                    ),
-                                    mot_detection.conf,
-                                    Some(1),
-                                    Some("person".to_string()),
-                                    None,
+                let shape = match shape[..] {
+                    [i1, i2] => [i1 as usize, i2 as usize],
+                    _ => panic!("expected 2D array"),
+                };
+                let true_shape = shape.set_f(order == npyz::Order::Fortran);
+                let array = ndarray::Array2::from_shape_vec(true_shape, data)?;
+
+                let detections = array
+                    .outer_iter()
+                    .map(|item| {
+                        (
+                            item[0] as usize,
+                            deepsort_rs::Detection::new(
+                                None,
+                                deepsort_rs::BoundingBox::new(
+                                    item[2] as f32,
+                                    item[3] as f32,
+                                    item[4] as f32,
+                                    item[5] as f32,
                                 ),
-                            ))
-                        } else {
-                            None
-                        }
+                                item[6] as f32,
+                                Some(1),
+                                Some("person".to_string()),
+                                Some(item.slice(s![10..]).map(|v| *v as f32).to_vec()),
+                            ),
+                        )
                     })
-                    .collect::<Vec<(usize, Detection)>>();
+                    .collect::<Vec<_>>();
 
                 let mut frame_detections = IndexMap::<usize, Vec<Detection>>::new();
-                detections
-                    .into_iter()
-                    .for_each(|(frame_index, detection)| {
-                        match frame_detections.entry(frame_index) {
-                            indexmap::map::Entry::Occupied(mut occupied) => {
-                                occupied.get_mut().push(detection);
-                            }
-                            indexmap::map::Entry::Vacant(vacant) => {
-                                vacant.insert(vec![detection]);
-                            }
-                        }
-                    });
+                detections.into_iter().for_each(|(frame_index, detection)| {
+                    frame_detections
+                        .entry(frame_index)
+                        .and_modify(|detections| detections.push(detection.clone()))
+                        .or_insert(vec![detection]);
+                });
 
                 std::fs::create_dir_all(output_dir.clone())?;
                 let mut output_file = OpenOptions::new()
@@ -552,81 +552,48 @@ fn main() -> Result<()> {
                     .truncate(true)
                     .create(true)
                     .open(output_dir.join(format!(
-                    "{}.txt",
-                    path.parent()
-                    .unwrap().parent()
-                    .unwrap()
-                    .file_stem().unwrap().to_string_lossy()
-                )))?;
+                        "{}.txt",
+                        npy_path.file_stem().unwrap().to_string_lossy()
+                    )))?;
 
                 frame_detections
                     .into_iter()
                     .try_for_each(|(frame_index, detections)| {
                         println!("Procesing frame {:0>4}", frame_index);
 
-                        let tracks = tracker.update(detections)?;
+                        let detections = detections
+                            .into_iter()
+                            .filter(|detection| detection.confidence() > min_confidence)
+                            .map(|mut detection| {
+                                // remove feature vector if below threshold (will become iou/sort tracking only)
+                                if detection.confidence() < min_feature_confidence {
+                                    *detection.feature_mut() = None;
+                                };
 
-                        tracks
+                                detection
+                            })
+                            .collect::<Vec<_>>();
+
+                        tracker.predict();
+                        tracker.update(&detections)?;
+
+                        tracker
+                            .tracks()
                             .iter()
-                            .sorted_by_key(|track| track.track_id())
+                            .filter(|track| track.is_confirmed() && track.time_since_update() <= 1)
                             .try_for_each(|track| {
                                 output_file.write_all(
                                     format!(
-                                        "{frame_index},{},{:.2},{:.2},{:.2},{:.2},{:.2},-1,-1,-1\n",
+                                        "{frame_index},{},{:.2},{:.2},{:.2},{:.2},1,-1,-1,-1\n",
                                         track.track_id(),
                                         track.bbox().x(),
                                         track.bbox().y(),
                                         track.bbox().width(),
-                                        track.bbox().height(),
-                                        track.detection().confidence(),
+                                        track.bbox().height()
                                     )
                                     .as_bytes(),
                                 )
                             })?;
-
-                        tracker
-                            .tracked_tracks()
-                            .iter()
-                            .sorted_by_key(|track| track.track_id())
-                            .for_each(|track| {
-                                println!(
-                                    "{} tracked_tracks {} {} {:?} {}",
-                                    frame_index,
-                                    track.track_id(),
-                                    track.is_activated(),
-                                    track.detection().confidence(),
-                                    track.bbox().to_tlwh()
-                                );
-                            });
-                        tracker
-                            .lost_tracks()
-                            .iter()
-                            .sorted_by_key(|track| track.track_id())
-                            .for_each(|track| {
-                                println!(
-                                    "{} lost_tracks {} {} {} {:?} {}",
-                                    frame_index,
-                                    track.track_id(),
-                                    track.is_activated(),
-                                    track.time_since_update(),
-                                    track.detection().confidence(),
-                                    track.bbox().to_tlwh()
-                                );
-                            });
-                        tracker
-                            .removed_tracks()
-                            .iter()
-                            .sorted_by_key(|track| track.track_id())
-                            .for_each(|track| {
-                                println!(
-                                    "{} removed_tracks {} {} {:?} {}",
-                                    frame_index,
-                                    track.track_id(),
-                                    track.is_activated(),
-                                    track.detection().confidence(),
-                                    track.bbox().to_tlwh()
-                                );
-                            });
 
                         Ok(())
                     })
