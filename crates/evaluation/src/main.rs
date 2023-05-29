@@ -97,25 +97,9 @@ enum Commands {
         #[arg(long)]
         output_dir: PathBuf,
 
-        /// Detection confidence threshold. Disregard all detections that have a confidence lower than this value.
-        #[arg(long, default_value_t = 0.0)]
-        min_confidence: f32,
-
-        /// Detection confidence threshold. Do not use any features lower than this confidence in tracking.
-        #[arg(long, default_value_t = 0.0)]
-        min_feature_confidence: f32,
-
-        /// Threshold on the detection bounding box height. Detections with height smaller than this value are disregarded.
-        #[arg(long, default_value_t = 0)]
-        min_detection_height: u32,
-
-        /// Gating threshold for cosine distance metric (object appearance).
-        #[arg(long, default_value_t = 1.0)]
-        max_cosine_distance: f32,
-
-        /// Maximum size of the appearance descriptors gallery. If None, no budget is enforced.
-        #[arg(long, default_value_t = 100)]
-        nn_budget: usize,
+        /// Detection outputs must be at least this big
+        #[arg(long, default_value_t = 100.0)]
+        min_box_area: f32,
     },
 }
 
@@ -477,11 +461,7 @@ fn main() -> Result<()> {
         Commands::Evaluate {
             detection_dir,
             output_dir,
-            min_confidence,
-            min_feature_confidence,
-            min_detection_height: _,
-            max_cosine_distance,
-            nn_budget,
+            min_box_area,
         } => {
             let paths = glob::glob(&format!("{}", detection_dir.to_string_lossy()))
                 .unwrap()
@@ -495,10 +475,6 @@ fn main() -> Result<()> {
                 tracker.with_max_iou_distance(0.9);
                 tracker.with_max_age(30);
 
-                // same as bytetrack
-                // let scale = (800f32 / 1080f32).min(1440f32 / 1920f32);
-                let scale = 1.0;
-
                 let mut reader = csv::ReaderBuilder::new()
                     .has_headers(false)
                     .from_path(path.clone())?;
@@ -508,27 +484,23 @@ fn main() -> Result<()> {
                     .map(|mot_detection| Ok(mot_detection?))
                     .collect::<Result<Vec<_>>>()?
                     .iter()
-                    .filter_map(|mot_detection| {
-                        if mot_detection.conf > min_confidence {
-                            Some((
-                                mot_detection.frame,
-                                deepsort_rs::Detection::new(
-                                    None,
-                                    deepsort_rs::BoundingBox::new(
-                                        mot_detection.bb_left / scale,
-                                        mot_detection.bb_top / scale,
-                                        mot_detection.bb_width / scale,
-                                        mot_detection.bb_height / scale,
-                                    ),
-                                    mot_detection.conf,
-                                    Some(1),
-                                    Some("person".to_string()),
-                                    None,
+                    .map(|mot_detection| {
+                        (
+                            mot_detection.frame,
+                            deepsort_rs::Detection::new(
+                                None,
+                                deepsort_rs::BoundingBox::new(
+                                    mot_detection.bb_left,
+                                    mot_detection.bb_top,
+                                    mot_detection.bb_width,
+                                    mot_detection.bb_height,
                                 ),
-                            ))
-                        } else {
-                            None
-                        }
+                                mot_detection.conf,
+                                Some(1),
+                                Some("person".to_string()),
+                                None,
+                            ),
+                        )
                     })
                     .collect::<Vec<(usize, Detection)>>();
 
@@ -570,9 +542,11 @@ fn main() -> Result<()> {
                             .iter()
                             .sorted_by_key(|track| track.track_id())
                             .try_for_each(|track| {
-                                output_file.write_all(
-                                    format!(
-                                        "{frame_index},{},{:.2},{:.2},{:.2},{:.2},{:.2},-1,-1,-1\n",
+                                let vertical = track.bbox().width() / track.bbox().height() > 1.6;
+                                if track.bbox().area() > min_box_area && !vertical {
+                                    Ok(output_file.write_all(
+                                        format!(
+                                        "{frame_index},{},{:.1},{:.1},{:.1},{:.1},{:.2},-1,-1,-1\n",
                                         track.track_id(),
                                         track.bbox().x(),
                                         track.bbox().y(),
@@ -580,8 +554,11 @@ fn main() -> Result<()> {
                                         track.bbox().height(),
                                         track.detection().confidence(),
                                     )
-                                    .as_bytes(),
-                                )
+                                        .as_bytes(),
+                                    )?)
+                                } else {
+                                    Ok(())
+                                }
                             })?;
 
                         tracker

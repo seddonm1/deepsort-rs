@@ -87,7 +87,7 @@ impl Tracker {
         Tracker {
             max_iou_distance: max_iou_distance.unwrap_or(0.9),
             track_threshold: track_threshold.unwrap_or(0.6),
-            detection_threshold: track_threshold.unwrap_or(0.6) + 0.1,
+            detection_threshold: track_threshold.unwrap_or(0.7),
             max_age: max_age.unwrap_or(30),
             kf: KalmanFilter::default(),
             tracked_tracks: HashSet::new(),
