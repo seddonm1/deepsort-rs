@@ -44,10 +44,8 @@ pub struct Track {
     match_source: Option<MatchSource>,
     /// The last detection matched to this track
     detection: Detection,
-    /// Total number of measurement updates.
-    hits: usize,
-    /// Total number of frames since first occurance.
-    age: usize,
+    /// Frame id of first detection
+    frame_id: usize,
     /// Total number of frames since last measurement update.
     time_since_update: usize,
     /// A cache of features. On each measurement update, the associated feature vector is added to this list.
@@ -61,10 +59,10 @@ impl std::fmt::Debug for Track {
             .field("activated", &self.activated)
             .field("track_id", &self.track_id)
             .field("match_source", &self.match_source)
-            .field("detection", &self.detection)
-            .field("hits", &self.hits)
-            .field("age", &self.age)
+            .field("bbox", &self.bbox())
+            .field("frame_id", &self.frame_id)
             .field("time_since_update", &self.time_since_update)
+            .field("detection", &self.detection)
             .finish()
     }
 }
@@ -91,10 +89,8 @@ impl Track {
     /// * `mean`: Mean vector of the initial state distribution.
     /// * `covariance`: Covariance matrix of the initial state distribution.
     /// * `track_id`: A unique track identifier.
-    /// * `confidence`: A confidence score of the latest update.
-    /// * `class_id`: An optional class identifier.
-    /// * `n_init`: Number of consecutive detections before the track is confirmed. The track state is set to `Deleted` if a miss occurs within the first `n_init` frames.
-    /// * `max_age`: The maximum number of consecutive misses before the track state is set to `Deleted`.
+    /// * `frame_id`: Frame id of the first detection.
+    /// * `detection`: The detection that created this track.
     /// * `features`: Feature vector of the detection this track originates from. If not None, this feature is added to the `features` cache.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -103,6 +99,7 @@ impl Track {
         mean: Array1<f32>,
         covariance: Array2<f32>,
         track_id: usize,
+        frame_id: usize,
         detection: Detection,
         features: Option<Array2<f32>>,
     ) -> Track {
@@ -112,10 +109,9 @@ impl Track {
             mean,
             covariance,
             track_id,
+            frame_id,
             match_source: None,
             detection,
-            hits: 1,
-            age: 1,
             time_since_update: 0,
             features,
         }
@@ -185,9 +181,8 @@ impl Track {
     /// # Parameters
     ///
     /// * `kf`: The Kalman filter.
-    pub fn predict(&mut self, kf: &KalmanFilter) {
-        (self.mean, self.covariance) = kf.predict(&self.mean, &self.covariance);
-        self.age += 1;
+    pub fn predict(&mut self, kf: &KalmanFilter, mean: Option<&Array1<f32>>) {
+        (self.mean, self.covariance) = kf.predict(mean.unwrap_or(&self.mean), &self.covariance);
         self.time_since_update += 1;
     }
 
@@ -215,7 +210,6 @@ impl Track {
 
         self.match_source = match_source;
         self.detection = detection;
-        self.hits += 1;
         self.time_since_update = 0;
         self.state = TrackState::Tracked;
         self.activated = true;
@@ -238,8 +232,6 @@ impl Track {
         (self.mean, self.covariance) =
             kf.update(&self.mean, &self.covariance, &detection.bbox().to_xyah())?;
 
-        self.match_source = match_source;
-
         if let Some(feature) = detection.feature() {
             match &mut self.features {
                 Some(features) => features.push_row(feature.view())?,
@@ -247,7 +239,8 @@ impl Track {
             };
         }
 
-        self.hits = 0;
+        self.match_source = match_source;
+        self.detection = detection;
         self.time_since_update = 0;
         self.state = TrackState::Tracked;
         self.activated = true;

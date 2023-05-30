@@ -13,7 +13,7 @@ use std::rc::Rc;
 /// # Returns
 ///
 /// The intersection over union in [0.0, 1.0] between the `bbox` and each candidate. A higher score means a larger fraction of the `bbox` is occluded by the candidate.
-fn intersection_over_union(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
+pub fn intersection_over_union(bbox: &Array1<f32>, candidates: &Array2<f32>) -> Array1<f32> {
     let bbox_tl = bbox.slice(s![..2]).to_owned();
     let bbox_br = &bbox_tl + bbox.slice(s![2..4]).to_owned();
     let candidates_tl = candidates.slice(s![.., 0..2]).to_owned();

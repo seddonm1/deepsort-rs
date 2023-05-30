@@ -130,26 +130,20 @@ impl KalmanFilter {
         mean: &Array1<f32>,
         covariance: &Array2<f32>,
     ) -> (Array1<f32>, Array2<f32>) {
-        let std_pos = arr1::<f32>(&[
+        let std = arr1::<f32>(&[
+            // std_pos
             self.std_weight_position * mean[3],
             self.std_weight_position * mean[3],
             1e-2,
             self.std_weight_position * mean[3],
-        ]);
-
-        let std_vel = arr1::<f32>(&[
+            // std_vel
             self.std_weight_velocity * mean[3],
             self.std_weight_velocity * mean[3],
             1e-5,
             self.std_weight_velocity * mean[3],
         ]);
 
-        let motion_cov = Array2::from_diag(
-            &concatenate![Axis(0), std_pos, std_vel]
-                .mapv(|v| v.powi(2))
-                .diag(),
-        );
-
+        let motion_cov = Array2::from_diag(&std.mapv(|v| v.powi(2)).diag());
         let mean = self.motion_mat.dot(mean);
         let covariance = self.motion_mat.dot(covariance).dot(&self.motion_mat.t()) + motion_cov;
 

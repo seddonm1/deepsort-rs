@@ -1,7 +1,7 @@
 mod utils;
 use anyhow::{Ok, Result};
 use clap::{Parser, Subcommand};
-use deepsort_rs::{BoundingBox, Detection, Tracker};
+use deepsort_rs::{BoundingBox, Detection, MatchSource, Tracker};
 use image::{imageops, ImageBuffer, Rgb};
 use indexmap::IndexMap;
 use npyz::WriterBuilder;
@@ -534,9 +534,9 @@ fn main() -> Result<()> {
                 frame_detections
                     .into_iter()
                     .try_for_each(|(frame_index, detections)| {
-                        println!("Procesing frame {:0>4}", frame_index);
+                        println!("\nProcesing frame {:0>4}", frame_index);
 
-                        let tracks = tracker.update(detections)?;
+                        let tracks = tracker.update(frame_index, detections)?;
 
                         tracks
                             .iter()
@@ -567,12 +567,18 @@ fn main() -> Result<()> {
                             .sorted_by_key(|track| track.track_id())
                             .for_each(|track| {
                                 println!(
-                                    "{} tracked_tracks {} {} {:?} {}",
+                                    "{} tracked_tracks {} {} {:?} {} {:?}",
                                     frame_index,
                                     track.track_id(),
                                     track.is_activated(),
                                     track.detection().confidence(),
-                                    track.bbox().to_tlwh()
+                                    track.bbox().to_tlwh(),
+                                    track.match_source().as_ref().map(|source| {
+                                        match source {
+                                            MatchSource::IoU { distance } => distance,
+                                            MatchSource::NearestNeighbor { distance } => distance,
+                                        }
+                                    })
                                 );
                             });
                         tracker
@@ -604,6 +610,10 @@ fn main() -> Result<()> {
                                     track.bbox().to_tlwh()
                                 );
                             });
+
+                        if frame_index == 6000 {
+                            std::process::exit(0)
+                        }
 
                         Ok(())
                     })

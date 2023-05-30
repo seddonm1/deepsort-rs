@@ -1,6 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use crate::{track::TrackState, *};
+use crate::{
+    iou_matching::intersection_over_union, kuhn_munkres::kuhn_munkres_min, track::TrackState, *,
+};
 use anyhow::{Ok, Result};
 use ndarray::*;
 
@@ -129,10 +131,10 @@ impl Tracker {
     ///
     /// # Parameters
     ///
+    /// * `frame_id`: The frame identifier.
     /// * `detections`: A list of detections at the current time step.
-    pub fn update(&mut self, detections: Vec<Detection>) -> Result<Vec<&Track>> {
+    pub fn update(&mut self, frame_id: usize, detections: Vec<Detection>) -> Result<Vec<&Track>> {
         let mut new_tracked_tracks = HashSet::new();
-        let mut new_lost_tracks = HashSet::new();
         let mut new_removed_tracks = HashSet::new();
 
         // Split detections into high and low confidence
@@ -150,11 +152,20 @@ impl Tracker {
             .partition(|track| track.is_activated());
 
         track_pool.extend(lost_tracks);
-        track_pool.dedup();
-        track_pool
-            .iter_mut()
-            .for_each(|track| track.predict(&self.kf));
+        track_pool.iter_mut().for_each(|track| {
+            track.predict(
+                &self.kf,
+                (!track.is_tracked())
+                    .then(|| {
+                        let mut mean = track.mean().clone();
+                        mean[7] = 0.0;
+                        mean
+                    })
+                    .as_ref(),
+            );
+        });
 
+        println!("STEP 1");
         // Step 1
         // Associate high confidence detections with confimed tracks using IoU.
         let (high_iou_confirmed_matches, unmatched_tracks, unmatched_high_detections) =
@@ -164,6 +175,18 @@ impl Tracker {
                 track_pool,
                 high_detections,
             )?;
+
+        println!(
+            "STEP 1 {:?} {:?}",
+            unmatched_tracks
+                .iter()
+                .map(|track| track.track_id())
+                .collect::<Vec<_>>(),
+            unmatched_high_detections
+                .iter()
+                .map(|detection| detection.id())
+                .collect::<Vec<_>>()
+        );
 
         // Update tracks
         high_iou_confirmed_matches
@@ -186,15 +209,34 @@ impl Tracker {
                 Ok(())
             })?;
 
+        println!("STEP 2");
+
         // Step 2
         // Associate low confidence detections with unmatched confirmed tracks using IoU.
-        let (low_iou_confirmed_matches, unmatched_tracks, _unmatched_low_detections) =
+        let (mut new_lost_tracks, unmatched_tracks): (HashSet<Track>, HashSet<Track>) =
+            unmatched_tracks
+                .into_iter()
+                .partition(|track| track.is_lost());
+
+        let (low_iou_confirmed_matches, unmatched_tracks, unmatched_low_detections) =
             linear_assignment::min_cost_matching(
                 iou_matching::intersection_over_union_cost(),
                 0.5,
-                unmatched_tracks,
+                unmatched_tracks.into_iter().collect::<Vec<_>>(),
                 low_detections,
             )?;
+
+        println!(
+            "STEP 2 {:?} {:?}",
+            unmatched_tracks
+                .iter()
+                .map(|track| (track.track_id(), track.state()))
+                .collect::<Vec<_>>(),
+            unmatched_low_detections
+                .iter()
+                .map(|detection| detection.id())
+                .collect::<Vec<_>>()
+        );
 
         // Update tracks
         low_iou_confirmed_matches
@@ -218,6 +260,7 @@ impl Tracker {
             })?;
 
         // mark unmatched tracks as lost
+        println!("{:?}", unmatched_tracks);
         unmatched_tracks.into_iter().for_each(|mut track| {
             if !track.is_lost() {
                 track.mark_lost();
@@ -225,6 +268,7 @@ impl Tracker {
             new_lost_tracks.insert(track);
         });
 
+        println!("STEP 3");
         // Step 3
         // Associate unmatched high confidence detections with unconfirmed tracks using IoU.
         let (iou_unconfirmed_matches, unmatched_unconfirmed_tracks, unmatched_high_detections) =
@@ -234,6 +278,18 @@ impl Tracker {
                 unconfirmed_tracks,
                 unmatched_high_detections,
             )?;
+
+        println!(
+            "STEP 3 {:?} {:?}",
+            unmatched_unconfirmed_tracks
+                .iter()
+                .map(|track| track.track_id())
+                .collect::<Vec<_>>(),
+            unmatched_high_detections
+                .iter()
+                .map(|detection| detection.id())
+                .collect::<Vec<_>>()
+        );
 
         // Update matched tracks with the detection
         iou_unconfirmed_matches
@@ -259,15 +315,17 @@ impl Tracker {
                 new_removed_tracks.insert(track);
             });
 
+        println!("STEP 4");
         // Step 4
         // Initialize new tracks that are above the detection threshold
         unmatched_high_detections.into_iter().for_each(|detection| {
             if detection.confidence() > self.detection_threshold {
-                let track = self.activate(detection);
+                let track = self.activate(frame_id, detection);
                 new_tracked_tracks.insert(track);
             }
         });
 
+        println!("STEP 5");
         // Step 5
         // Remove any tracks that have been lost for n frames
         let (new_lost_tracks, expired_lost_tracks): (HashSet<Track>, HashSet<Track>) =
@@ -275,10 +333,16 @@ impl Tracker {
                 .into_iter()
                 .partition(|track| track.time_since_update() <= self.max_age);
 
+        println!("STEP 6");
         // Step 6
         // Update the state for next run
+        let mut lost_tracks = std::mem::take(&mut self.lost_tracks);
+        lost_tracks.extend(new_lost_tracks);
+        let (new_tracked_tracks, new_lost_tracks) =
+            Self::try_remove_duplicate_tracks(new_tracked_tracks, lost_tracks)?;
         _ = std::mem::replace(&mut self.tracked_tracks, new_tracked_tracks);
-        self.lost_tracks.extend(new_lost_tracks);
+        _ = std::mem::replace(&mut self.lost_tracks, new_lost_tracks);
+
         self.removed_tracks.extend(new_removed_tracks);
         self.removed_tracks.extend(expired_lost_tracks);
 
@@ -292,7 +356,7 @@ impl Tracker {
             .collect())
     }
 
-    fn activate(&mut self, detection: Detection) -> Track {
+    fn activate(&mut self, frame_id: usize, detection: Detection) -> Track {
         let (mean, covariance) = self.kf.initiate(detection.bbox());
         let features = detection
             .feature()
@@ -304,11 +368,90 @@ impl Tracker {
             mean,
             covariance,
             self.next_id,
+            frame_id,
             detection,
             features,
         );
         self.next_id += 1;
         track
+    }
+
+    fn try_remove_duplicate_tracks(
+        left_tracks: HashSet<Track>,
+        right_tracks: HashSet<Track>,
+    ) -> Result<(HashSet<Track>, HashSet<Track>)> {
+        if left_tracks.is_empty() || right_tracks.is_empty() {
+            return Ok((left_tracks, right_tracks));
+        }
+
+        let candidates: Array2<f32> = stack(
+            Axis(0),
+            &left_tracks
+                .iter()
+                .map(|track: &Track| track.bbox().to_tlwh())
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|tlwh| tlwh.view())
+                .collect::<Vec<_>>(),
+        )?;
+
+        let cost_matrix: Array2<f32> = stack(
+            Axis(0),
+            &right_tracks
+                .iter()
+                .map(|track| 1.0 - intersection_over_union(&track.bbox().to_tlwh(), &candidates))
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|array1| array1.view())
+                .collect::<Vec<_>>(),
+        )?;
+
+        let left_tracks_map = left_tracks.iter().enumerate().collect::<HashMap<_, _>>();
+        let right_tracks_map = right_tracks.iter().enumerate().collect::<HashMap<_, _>>();
+
+        // convert
+        let (cost_matrix, transposed) = if cost_matrix.nrows() > cost_matrix.ncols() {
+            (cost_matrix.t(), true)
+        } else {
+            (cost_matrix.view(), false)
+        };
+
+        // multiply by large constant to convert from f32 [0.0..1.0] to i64 which satisfies Matrix requirements (f32 does not implement `std::cmp::Ord`)
+        let cost_vec = cost_matrix.mapv(|v| (v * 10_000_000_000.0) as i64);
+
+        // invoke the kuhn munkres min (aka hungarian) assignment algorithm
+        // this is equivalent to `scipy.optimize.linear_sum_assignment(maximise=False)` but where scipy returns two arrays
+        // (row_ind and col_ind) `kuhn_munkres_min` returns just the col_ind array leaving row_ind (which is just a row index) to be
+        // derived manually.
+        let (_, col_indices) = kuhn_munkres_min(&cost_vec);
+        let row_indices = (0..col_indices.len()).collect::<Vec<_>>();
+
+        row_indices
+            .into_iter()
+            .zip(col_indices.into_iter())
+            .for_each(|(row, col)| {
+                let distance = cost_matrix[[row, col]];
+                println!(
+                    "{} {} {} {} {}",
+                    row,
+                    col,
+                    distance,
+                    left_tracks_map.len(),
+                    right_tracks_map.len()
+                );
+                if distance < 0.15 {
+                    let left_track = left_tracks_map
+                        .get(if transposed { &row } else { &col })
+                        .unwrap();
+                    let right_track = right_tracks_map
+                        .get(if transposed { &col } else { &row })
+                        .unwrap();
+
+                    println!("MATCH {:?} {:?} {}", left_track, right_track, distance);
+                }
+            });
+
+        Ok((left_tracks, right_tracks))
     }
 }
 

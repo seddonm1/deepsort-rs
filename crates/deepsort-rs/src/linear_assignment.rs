@@ -97,9 +97,6 @@ pub fn min_cost_matching(
         let (_, col_indices) = kuhn_munkres_min(&cost_vec);
         let row_indices = (0..col_indices.len()).collect::<Vec<_>>();
 
-        // println!("{:?}", col_indices);
-        // println!("{:?}", row_indices);
-
         let mut matches: Vec<Match> = Vec::with_capacity(tracks.len().max(detections.len()));
         row_indices
             .into_iter()
@@ -107,6 +104,12 @@ pub fn min_cost_matching(
             .for_each(|(row, col)| {
                 let distance = cost_matrix[[row, col]];
                 if distance < max_distance {
+                    let track = tracks.get(if transposed { &col } else { &row }).unwrap();
+                    let detection = detections
+                        .get(if transposed { &row } else { &col })
+                        .unwrap();
+                    println!("MATCH {:?} {:?} {}", track, detection, distance);
+
                     let track = tracks.remove(if transposed { &col } else { &row }).unwrap();
                     let detection = detections
                         .remove(if transposed { &row } else { &col })
@@ -114,6 +117,12 @@ pub fn min_cost_matching(
                     let m = Match::new(track, detection, distance);
                     // println!("{:?}", m);
                     matches.push(m);
+                } else {
+                    let track = tracks.get(if transposed { &col } else { &row }).unwrap();
+                    let detection = detections
+                        .get(if transposed { &row } else { &col })
+                        .unwrap();
+                    println!("NOT MATCH {:?} {:?} {}", track, detection, distance);
                 }
             });
 
@@ -142,6 +151,7 @@ mod tests {
             mean,
             covariance,
             0,
+            0,
             Detection::new(
                 None,
                 BoundingBox::new(0.0, 0.0, 0.0, 0.0),
@@ -159,6 +169,7 @@ mod tests {
             mean,
             covariance,
             1,
+            0,
             Detection::new(
                 None,
                 BoundingBox::new(0.0, 0.0, 0.0, 0.0),
@@ -176,6 +187,7 @@ mod tests {
             mean,
             covariance,
             2,
+            0,
             Detection::new(
                 None,
                 BoundingBox::new(0.0, 0.0, 0.0, 0.0),
